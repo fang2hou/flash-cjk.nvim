@@ -1,4 +1,4 @@
-local flypy = require("flash-zh.flypy")
+local flypy = require("flash-cjk.flypy")
 
 local M = {}
 

@@ -1,11 +1,15 @@
-local pinyin = require("flash-zh.pinyin")
+local pinyin = require("flash-cjk.pinyin")
+
 local M = {}
 M.__index = M
 
-function M.new(state)
+---@param state Flash.State
+---@param langs table<string, boolean>? language flags, default all enabled
+function M.new(state, langs)
 	local self
 	self = setmetatable({}, M)
 	self.state = state
+	self.langs = langs or { cn = true, jp = true, original = true }
 	self.used = {}
 	self:reset()
 	return self
@@ -31,11 +35,42 @@ function M:update()
 	end
 end
 
+local function char_size(str, i)
+	local b = string.byte(str, i)
+	if not b then
+		return 0
+	elseif b > 240 then
+		return 4
+	elseif b > 225 then
+		return 3
+	elseif b > 192 then
+		return 2
+	end
+	return 1
+end
+
+-- All spellings the matched text (plus the character right after it,
+-- so that a pattern covering the match exactly still predicts the next
+-- input letter) could have been typed as.
+function M:match_strs(line, start_col, end_col)
+	local size = char_size(line, end_col + 1)
+	local text = string.sub(line, start_col, end_col + size)
+	local strs = {}
+	if self.langs.cn then
+		vim.list_extend(strs, pinyin.pinyin(text))
+	end
+	if self.langs.jp then
+		vim.list_extend(strs, require("flash-cjk.jp").romaji_strs(text))
+	end
+	return strs
+end
+
 -- Returns valid labels for the current search pattern in this window.
 ---@param labels string[]
 ---@return string[] returns labels to skip or `nil` when all labels should be skipped
 function M:skip(win, labels)
 	local prefix = self.state.pattern.pattern
+	local prefix_len = string.len(prefix)
 	for _, match in ipairs(self.state.results) do
 		if match.win == win then
 			local buf = vim.api.nvim_win_get_buf(match.win)
@@ -50,11 +85,10 @@ function M:skip(win, labels)
 				goto continue
 			end
 
-			local pys = pinyin.pinyin(string.sub(lines[1], start_col, end_col + 4), "")
-			local prefix_len = string.len(prefix)
+			local strs = self:match_strs(lines[1], start_col, end_col)
 			local filter_chars = {}
-			for i = 1, #pys do
-				filter_chars[i] = string.sub(pys[i], prefix_len + 1, prefix_len + 1)
+			for i = 1, #strs do
+				filter_chars[i] = string.sub(strs[i], prefix_len + 1, prefix_len + 1)
 			end
 
 			labels = vim.tbl_filter(function(c)
