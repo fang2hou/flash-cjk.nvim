@@ -5,11 +5,13 @@ M.__index = M
 
 ---@param state Flash.State
 ---@param langs table<string, boolean>? language flags, default all enabled
-function M.new(state, langs)
+---@param force_keys table? per-jump force_keys override
+function M.new(state, langs, force_keys)
 	local self
 	self = setmetatable({}, M)
 	self.state = state
-	self.langs = langs or { cn = true, jp = true, original = true }
+	self.langs = langs or { cn = true, jp = true, ko = true, original = true }
+	self.force_keys = force_keys
 	self.used = {}
 	self:reset()
 	return self
@@ -52,17 +54,17 @@ end
 -- All spellings the matched text (plus the character right after it,
 -- so that a pattern covering the match exactly still predicts the next
 -- input letter) could have been typed as.
-function M:match_strs(line, start_col, end_col)
+function M:match_strs(line, start_col, end_col, langs)
 	local size = char_size(line, end_col + 1)
 	local text = string.sub(line, start_col, end_col + size)
 	local strs = {}
-	if self.langs.cn then
+	if langs.cn then
 		vim.list_extend(strs, pinyin.pinyin(text))
 	end
-	if self.langs.jp then
+	if langs.jp then
 		vim.list_extend(strs, require("flash-cjk.jp").romaji_strs(text))
 	end
-	if self.langs.ko then
+	if langs.ko then
 		vim.list_extend(strs, require("flash-cjk.ko").strs(text))
 	end
 	return strs
@@ -72,8 +74,12 @@ end
 ---@param labels string[]
 ---@return string[] returns labels to skip or `nil` when all labels should be skipped
 function M:skip(win, labels)
-	local prefix = self.state.pattern.pattern
+	local prefix, forced = require("flash-cjk").parse_forced(self.state.pattern.pattern, self.force_keys)
 	local prefix_len = string.len(prefix)
+	local langs = self.langs
+	if forced then
+		langs = { cn = forced == "cn", jp = forced == "jp", ko = forced == "ko" }
+	end
 	for _, match in ipairs(self.state.results) do
 		if match.win == win then
 			local buf = vim.api.nvim_win_get_buf(match.win)
@@ -88,7 +94,7 @@ function M:skip(win, labels)
 				goto continue
 			end
 
-			local strs = self:match_strs(lines[1], start_col, end_col)
+			local strs = self:match_strs(lines[1], start_col, end_col, langs)
 			local filter_chars = {}
 			for i = 1, #strs do
 				filter_chars[i] = string.sub(strs[i], prefix_len + 1, prefix_len + 1)

@@ -21,6 +21,17 @@ M.config = {
 		original = true,
 		alpha_mixing = true,
 	},
+	-- Keys that lock matching to a single language mid-input. The raw
+	-- key bytes are never stored in the pattern; each lock writes a
+	-- buffer-safe internal marker instead (C-j's newline would break
+	-- flash's prompt). C-c's interrupt is intercepted and dispatched to
+	-- the lock action while a flash-cjk jump is active.
+	force_keys = {
+		cn = "<C-c>",
+		jp = "<C-j>",
+		ko = "<C-k>",
+		eo = "<C-e>",
+	},
 }
 
 -- Upper bound on the number of pattern interpretations kept per keystroke.
@@ -270,23 +281,102 @@ function M.parser(str, prefix, ctx)
 	end
 end
 
----Builds a flash search mode function for the given language flags.
----@param langs table<string, boolean>
----@return fun(str: string): string, string
-function M.make_mix_mode(langs)
+-- ------------------------------------------------------------------
+-- mid-input language forcing
+-- A configurable key (default C-c / C-j / C-k / C-e) pressed inside the
+-- flash prompt locks matching to one language. An internal marker
+-- byte is kept in the pattern string itself: extending keeps the
+-- lock, backspacing over it releases, and the last marker wins.
+--
+-- The pressed key and the marker byte are decoupled (see MARKER_BYTES):
+-- C-j's newline never enters the pattern (flash's prompt buffer rejects
+-- it), and C-c's getchar interrupt is intercepted by get_char_patch()
+-- and dispatched to the lock action while a flash-cjk jump is active.
+
+-- Internal marker bytes stored in the pattern. They are decoupled from
+-- the pressed keys: C-j itself (\n) can never enter the pattern because
+-- flash writes the pattern into its prompt buffer, which rejects
+-- newlines. All marker bytes are buffer-safe control characters.
+local MARKER_BYTES = { cn = "\x01", jp = "\x02", ko = "\x04", eo = "\x05" }
+
+---Returns the marker table for the enabled force_keys.
+---@param force_keys table lang -> key string (or false to disable)
+---@return table markers { map = byte->lang, strip = pattern? }
+local function markers_from_config(force_keys)
+	local markers = { map = {}, strip = nil }
+	local bytes = {}
+	for lang, key in pairs(force_keys) do
+		if type(key) == "string" and key ~= "" and MARKER_BYTES[lang] then
+			markers.map[MARKER_BYTES[lang]] = lang
+			bytes[#bytes + 1] = MARKER_BYTES[lang]
+		end
+	end
+	if #bytes > 0 then
+		markers.strip = "[" .. table.concat(bytes) .. "]"
+	end
+	return markers
+end
+
+---Splits a raw pattern into (clean_pattern, forced_lang?).
+---The rightmost marker in the pattern wins.
+---@param pattern string
+---@param force_keys table? overrides M.config.force_keys
+---@return string clean
+---@return string? forced "cn" | "jp" | "ko" | "eo"
+function M.parse_forced(pattern, force_keys)
+	local markers = markers_from_config(force_keys or M.config.force_keys)
+	if not markers.strip then
+		return pattern, nil
+	end
+	local clean = string.gsub(pattern, markers.strip, "")
+	local best_pos, best_lang = 0, nil
+	for marker, lang in pairs(markers.map) do
+		local pos = string.find(pattern, marker, 1, true)
+		while pos do
+			if pos > best_pos then
+				best_pos, best_lang = pos, lang
+			end
+			pos = string.find(pattern, marker, pos + 1, true)
+		end
+	end
+	return clean, best_lang
+end
+local function forced_langs(base, forced)
+	return {
+		cn = forced == "cn",
+		jp = forced == "jp",
+		ko = forced == "ko",
+		original = forced == "eo" or base.original,
+		alpha_mixing = base.alpha_mixing,
+	}
+end
+
+function M.make_mix_mode(langs, force_keys)
 	local comma = comma_map(langs)
+	local markers = force_keys ~= nil and markers_from_config(force_keys) or nil
 	return function(str)
-		local all = M.parser(str, nil, { count = 0, langs = langs, comma = comma })
+		local clean, forced
+		if markers then
+			clean, forced = M.parse_forced(str, force_keys)
+		else
+			clean, forced = M.parse_forced(str)
+		end
+		local eff_langs, eff_comma = langs, comma
+		if forced then
+			eff_langs = forced_langs(langs, forced)
+			eff_comma = comma_map(eff_langs)
+		end
+		local all = M.parser(clean, nil, { count = 0, langs = eff_langs, comma = eff_comma })
 		if #all == 0 then
 			-- no interpretation at all (e.g. original disabled and the
 			-- input has no pinyin/romaji reading): match the literal input
-			local ret = "\\V" .. vim.fn.escape(str, "\\")
+			local ret = "\\V" .. vim.fn.escape(clean, "\\")
 			return ret, ret
 		end
 		local regexs = { [[\(]] }
 		local seen = {}
 		for _, v in ipairs(all) do
-			local r = M.regex(v, comma)
+			local r = M.regex(v, eff_comma)
 			if not seen[r] then
 				seen[r] = true
 				regexs[#regexs + 1] = r
@@ -299,22 +389,75 @@ function M.make_mix_mode(langs)
 	end
 end
 
--- Default mixed mode: every enabled language.
-M.mix_mode = M.make_mix_mode(M.config.langs)
+-- Default mixed mode: every enabled language, default force keys.
+M.mix_mode = M.make_mix_mode(M.config.langs, M.config.force_keys)
 
 -- ------------------------------------------------------------------
--- public API
+-- Swallows the C-c interrupt inside flash's input loop when (and only
+-- when) the currently active flash state has a C-c language-lock action
+-- registered (i.e. a flash-cjk jump with C-c bound). Plain flash jumps
+-- keep their original behavior: the interrupt returns nil and exits.
+local function get_char_patch()
+	local ok, Util = pcall(require, "flash.util")
+	if not ok or type(Util.get_char) ~= "function" or Util._flash_cjk_patched then
+		return
+	end
+	Util._flash_cjk_patched = true
+	Util.get_char = function()
+		local Hacks = require("flash.hacks")
+		Hacks.setcursor()
+		vim.cmd("redraw")
+		local ok2, ret = pcall(vim.fn.getcharstr)
+		if not ok2 then
+			local okS, State = pcall(require, "flash.state")
+			if okS then
+				for state in pairs(State._states or {}) do
+					-- only visible (actively looping) states: stale states
+					-- kept alive by repeat references must not swallow C-c
+					if state.visible
+						and state.opts
+						and state.opts.actions
+						and state.opts.actions["\x03"]
+					then
+						return "\x03"
+					end
+				end
+			end
+			return nil
+		end
+		return ret ~= Util.t("<esc>") and ret or nil
+	end
+end
 
 local function build_opts(opts)
 	local langs = resolve_langs(opts)
-	local mode = M.make_mix_mode(langs)
+	local keys = vim.tbl_deep_extend("force", {}, M.config.force_keys, opts.force_keys or {})
+	local mode = M.make_mix_mode(langs, keys)
+	local actions = {}
+	for _, lang in ipairs({ "cn", "jp", "ko", "eo" }) do
+		local key = keys[lang]
+		if type(key) == "string" and key ~= "" then
+			local marker = MARKER_BYTES[lang]
+			actions[vim.api.nvim_replace_termcodes(key, true, true, true)] = function(state, _)
+				state:update({ pattern = state.pattern:extend(marker) })
+				return true
+			end
+		end
+	end
+	-- C-c never reaches flash's actions: getcharstr raises an interrupt
+	-- for it. Patch Util.get_char so that the interrupt is swallowed and
+	-- the raw byte is returned for action dispatch -- but only while a
+	-- C-c language lock is actually configured; everything else keeps
+	-- flash's original behavior.
+	get_char_patch()
 	return vim.tbl_deep_extend("force", {
 		labels = "asdfghjklqwertyuiopzxcvbnm",
 		search = {
 			mode = mode,
 		},
+		actions = actions,
 		labeler = function(_, state)
-			require("flash-cjk.labeler").new(state, langs):update()
+			require("flash-cjk.labeler").new(state, langs, keys):update()
 		end,
 	}, opts)
 end
@@ -361,6 +504,13 @@ function M.setup(opts)
 		end
 		comma_cache = {}
 		M.mix_mode = M.make_mix_mode(M.config.langs)
+	end
+	if opts.force_keys then
+		for lang, key in pairs(opts.force_keys) do
+			if vim.list_contains({ "cn", "jp", "ko", "eo" }, lang) then
+				M.config.force_keys[lang] = key -- string key, or false to disable
+			end
+		end
 	end
 	if not opts.char_map then
 		return

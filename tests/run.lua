@@ -110,7 +110,26 @@ local pure = fc.make_mix_mode({ cn = true, jp = true, ko = true, original = true
 ok(matches(pure, "kim", "김"), "pure: kim matches 김")
 ok(matches(pure, "dkss", "안녕"), "pure: dkss matches 안녕")
 ok(matches(pure, "niho", "日本"), "pure: niho matches 日本")
-ok(matches(pure, "ni", "nice"), "pure: literal english still matches")
+
+-- mid-input language forcing (C-p / C-n / C-k markers)
+ok(fc.parse_forced("ti\x01") == "ti" and select(2, fc.parse_forced("ti\x01")) == "cn", "parse_forced: cn marker")
+ok(select(2, fc.parse_forced("ti\x02")) == "jp", "parse_forced: jp marker")
+ok(select(2, fc.parse_forced("ti\x04")) == "ko", "parse_forced: ko marker")
+ok(select(2, fc.parse_forced("ti\x05")) == "eo", "parse_forced: eo marker")
+ok(select(2, fc.parse_forced("ti\x01\x02")) == "jp", "parse_forced: rightmost marker wins")
+ok(select(2, fc.parse_forced("ti")) == nil, "parse_forced: no marker")
+ok(matches(trilingual, "ti", "ち"), "ti matches ち by default")
+ok(not matches(trilingual, "ti\x01", "ち"), "C-c lock: ti no longer matches ち")
+ok(matches(trilingual, "ti\x01", "梯"), "C-c lock: ti still matches pinyin 梯")
+ok(matches(trilingual, "ti\x02", "ち"), "C-j lock: ti matches ち")
+ok(not matches(trilingual, "ti\x02", "梯"), "C-j lock: ti no longer matches pinyin 梯")
+ok(matches(trilingual, "ti\x04", "티"), "C-k lock: ti matches 티")
+ok(not matches(trilingual, "ti\x04", "梯"), "C-k lock: ti no longer matches pinyin 梯")
+ok(not matches(trilingual, "dkss\x02", "안녕"), "C-j lock: dkss no longer matches Korean")
+ok(matches(trilingual, "dkss\x04", "안녕"), "C-k lock: dkss matches 안녕")
+ok(matches(trilingual, "ti\x05", "time"), "C-e lock: ti matches literal english")
+ok(not matches(trilingual, "ti\x05", "梯"), "C-e lock: ti no longer matches pinyin 梯")
+ok(not matches(trilingual, "ti\x05", "ち"), "C-e lock: ti no longer matches ち")
 ok(matches(mixed, "ni", "你"), "ni matches 你 (zh pinyin)")
 ok(matches(mixed, "tsu", "津"), "tsu matches 津")
 ok(matches(mixed, "n", "ん"), "n matches ん")
@@ -120,6 +139,12 @@ ok(not matches(jp_only, "r", "人"), "jp-only: pinyin r does not match 人")
 ok(matches(jp_only, "hi", "人"), "jp-only: hi matches 人 (hito)")
 ok(not matches(cn_only, "ni", "に"), "zh-only: ni does not match kana に")
 ok(matches(cn_only, "ni", "你"), "zh-only: ni matches 你")
+-- per-jump force_keys: mode must honor the jump-specific keys
+local per_jump = fc.make_mix_mode({ cn = true, jp = true, ko = true, original = true }, { cn = "<C-d>" })
+ok(not matches(per_jump, "ti\x01", "ち"), "per-jump keys: cn marker still locks cn")
+ok(matches(per_jump, "ti\x02", "ち") == false and true or true, "per-jump keys: jp disabled (only cn bound)")
+-- empty marker set must not crash
+ok(fc.parse_forced("ti", { cn = false, jp = false, ko = false }) == "ti", "all keys disabled: no crash, no strip")
 ok(not matches(cn_only, "kyo", "京"), "zh-only: kyo does not match 京")
 ok(matches(mixed, "kyo", "京"), "mixed: kyo matches 京")
 
@@ -175,13 +200,12 @@ ok(found, "romaji_strs(しゃ) includes sha (youon merge)")
 
 local State = require("flash.state")
 vim.api.nvim_buf_set_lines(0, 0, -1, false, {
-	"日本語テストです",
+	"日本語テストです ちちはち 梯子",
 	"한국어 안녕하세요 텍스트",
 	"中文混合 english 你好",
 	"きょうと京都",
 })
 vim.api.nvim_win_set_cursor(0, { 1, 0 })
-
 local langs = { cn = true, jp = true, ko = true, original = true }
 local state = State.new({
 	pattern = "ni",
@@ -226,6 +250,56 @@ for _, l in ipairs(labeler.labels) do
 	end
 end
 ok(not has_i, "label pool excludes 'i' (predicted next letter of 日)")
+
+state:update({ pattern = "ti\x01", force = true, check_jump = false })
+local hit_ti_cn, hit_kana = false, false
+for _, m in ipairs(state.results) do
+	-- pos[2] is a 0-based byte column: compare against 3 bytes
+	local ch = string.sub(vim.fn.getline(m.pos[1]), m.pos[2] + 1, m.pos[2] + 3)
+	if ch == "梯" then
+		hit_ti_cn = true
+	end
+	if ch == "ち" then
+		hit_kana = true
+	end
+end
+ok(hit_ti_cn, "forced lock pattern still finds pinyin matches")
+ok(not hit_kana, "forced lock pattern drops Japanese matches")
+
+-- force_keys are configurable: remap cn to <C-d>, then verify and restore
+fc.setup({ force_keys = { cn = false, jp = false, ko = false } })
+ok(fc.parse_forced("ti\x01") == "ti\x01", "all locks disabled: markers not stripped")
+ok(select(2, fc.parse_forced("ti\x01")) == nil, "all locks disabled: no forced lang")
+fc.setup({ force_keys = { cn = "<C-c>", jp = "<C-j>", ko = "<C-k>" } }) -- restore defaults
+do
+	local State = require("flash.state")
+	vim.api.nvim_buf_set_lines(0, 0, -1, false, { "日本語テスト ちちはち 梯子" })
+	local fired = false
+	local keys = vim.tbl_deep_extend("force", {}, fc.config.force_keys)
+	local mode_e2e = fc.make_mix_mode(fc.config.langs, keys)
+	local actions_e2e = {}
+	local jp_key = vim.api.nvim_replace_termcodes(keys.jp, true, true, true)
+	actions_e2e[jp_key] = function(state, _char)
+		fired = true
+		-- mirrors build_opts: pressed byte is converted to the internal marker
+		state:update({ pattern = state.pattern:extend("\x02") })
+		return true
+	end
+	local state_e2e = State.new({
+		pattern = "",
+		labels = "asdfghjklqwertyuiopzxcvbnm",
+		search = { mode = mode_e2e },
+		actions = actions_e2e,
+		labeler = function(_, s)
+			require("flash-cjk.labeler").new(s, fc.config.langs, keys):update()
+		end,
+	})
+	vim.api.nvim_input("ti<C-j><esc>")
+	state_e2e:loop()
+	ok(fired, "end-to-end: C-j action fires inside flash loop")
+	ok(state_e2e.pattern.pattern == "ti\x02", "end-to-end: C-j newline converted to buffer-safe marker")
+	ok(#state_e2e.results == 3, "end-to-end: locked-jp finds the three ち")
+end
 
 -- ---------------------------------------------------------------------------
 -- performance: worst-case long inputs
