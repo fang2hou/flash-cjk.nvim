@@ -6,12 +6,20 @@ local M = {}
 -- turned off globally via setup(), or per jump via jump({ langs = ... }):
 --   cn       pinyin matching (flypy + first letter)
 --   jp       romaji matching (kanji readings + kana)
+--   ko       Korean matching (romanization + two-set keys)
 --   original literal ASCII letters, i.e. plain flash.nvim behavior
+-- langs.alpha_mixing = false additionally drops interpretations that mix
+-- literal letters with language segments (e.g. alpha "n" + pinyin "i").
+-- The original flash-zh behavior keeps them; turning mixing off trades
+-- some mixed-chain reachability (e.g. pinyin "nihao" variants) for
+-- lower regex cost on long inputs; measure before enabling.
 M.config = {
 	langs = {
 		cn = true,
 		jp = true,
+		ko = true,
 		original = true,
+		alpha_mixing = true,
 	},
 }
 
@@ -32,6 +40,14 @@ local function get_jp()
 		jp = require("flash-cjk.jp")
 	end
 	return jp
+end
+
+local ko ---@type table?
+local function get_ko()
+	if ko == nil then
+		ko = require("flash-cjk.ko")
+	end
+	return ko
 end
 
 local function resolve_langs(opts)
@@ -92,6 +108,9 @@ local function make_nodes(comma)
 		jp = function(str)
 			return get_jp().pattern(str)
 		end,
+		ko = function(str)
+			return get_ko().pattern(str)
+		end,
 		other = function(str)
 			str = flypy.escape[str] or str
 			return str
@@ -139,7 +158,7 @@ function M.parser(str, prefix, ctx)
 	elseif string.match(firstchar, "%l") then
 		local results = {}
 		if secondchar == "" then
-			if ctx.langs.original then
+			if ctx.langs.original and (ctx.langs.alpha_mixing ~= false or prefix._alpha ~= false) then
 				local p1 = M.copy(prefix)
 				p1[#p1 + 1] = { str = firstchar, type = "alpha" }
 				results = M.merge_table(results, M.parser("", p1, ctx))
@@ -154,13 +173,24 @@ function M.parser(str, prefix, ctx)
 				p3[#p3 + 1] = { str = firstchar, type = "jp" }
 				results = M.merge_table(results, M.parser("", p3, ctx))
 			end
+			if ctx.langs.ko and get_ko().pattern(firstchar) then
+				local p4 = M.copy(prefix)
+				p4[#p4 + 1] = { str = firstchar, type = "ko" }
+				results = M.merge_table(results, M.parser("", p4, ctx))
+			end
 			return results
 		elseif string.match(secondchar, "%a") then
 			-- longest / most specific segments first: when the segmentation
 			-- budget runs out on long inputs, the informative branches
 			-- (pinyin, romaji) survive instead of the literal alpha ones
+			--
+			-- Literal letters and language segments do not mix within one
+			-- interpretation (prefix._alpha): mixed chains multiply the
+			-- alternatives and each giant CJK character class makes vim's
+			-- regex execution measurably slower.
 			if ctx.langs.cn and flypy.char2patterns[firstchar .. secondchar] then
 				local p = M.copy(prefix)
+				p._alpha = false
 				p[#p + 1] = { str = firstchar .. secondchar, type = "pinyin" }
 				results = M.merge_table(results, M.parser(string.sub(str, 3), p, ctx))
 			end
@@ -170,31 +200,61 @@ function M.parser(str, prefix, ctx)
 				local three = two .. thirdchar
 				if string.match(thirdchar, "%a") and J.pattern(three) then
 					local pj = M.copy(prefix)
+					pj._alpha = false
 					pj[#pj + 1] = { str = three, type = "jp" }
 					results = M.merge_table(results, M.parser(string.sub(str, 4), pj, ctx))
 				end
 				if J.pattern(two) then
 					local pj = M.copy(prefix)
+					pj._alpha = false
 					pj[#pj + 1] = { str = two, type = "jp" }
 					results = M.merge_table(results, M.parser(string.sub(str, 3), pj, ctx))
 				end
-				if J.pattern(firstchar) then
+				-- Mid-pattern single-letter romaji is only kept for keys that
+				-- are complete syllables on their own (vowels + n: あおい, にほんご);
+				-- consonant prefixes (ka, tsu...) are always typed to completion,
+				-- so they only matter as the last, unfinished segment.
+				if vim.list_contains({ "a", "e", "i", "o", "u", "n" }, firstchar) and J.pattern(firstchar) then
 					local pj = M.copy(prefix)
+					pj._alpha = false
 					pj[#pj + 1] = { str = firstchar, type = "jp" }
 					results = M.merge_table(results, M.parser(string.sub(str, 2), pj, ctx))
 				end
 			end
-			if ctx.langs.original then
+			if ctx.langs.ko then
+				local K = get_ko()
+				-- Korean segments: 2-4 letters (romanization or two-set keys)
+				-- anywhere; a lone vowel letter is a complete syllable (아=a)
+				-- and valid mid-pattern, same rule as Japanese vowels.
+				for len = 4, 2, -1 do
+					local seg = string.sub(str, 1, len)
+					if #seg == len and K.pattern(seg) then
+						local pk = M.copy(prefix)
+						pk._alpha = false
+						pk[#pk + 1] = { str = seg, type = "ko" }
+						results = M.merge_table(results, M.parser(string.sub(str, len + 1), pk, ctx))
+					end
+				end
+				if K.vowel_letter(firstchar) and K.pattern(firstchar) then
+					local pk = M.copy(prefix)
+					pk._alpha = false
+					pk[#pk + 1] = { str = firstchar, type = "ko" }
+					results = M.merge_table(results, M.parser(string.sub(str, 2), pk, ctx))
+				end
+			end
+			if ctx.langs.original and (ctx.langs.alpha_mixing ~= false or prefix._alpha ~= false) then
 				local p = M.copy(prefix)
 				p[#p + 1] = { str = firstchar, type = "alpha" }
 				results = M.merge_table(results, M.parser(string.sub(str, 2), p, ctx))
 			end
 			return results
-		elseif ctx.langs.original and vim.list_contains(chars, secondchar) then
+		elseif ctx.langs.original and (ctx.langs.alpha_mixing ~= false or prefix._alpha ~= false)
+			and vim.list_contains(chars, secondchar)
+		then
 			prefix[#prefix + 1] = { str = firstchar, type = "alpha" }
 			prefix[#prefix + 1] = { str = secondchar, type = "comma" }
 			return M.parser(string.sub(str, 3), prefix, ctx)
-		elseif ctx.langs.original then
+		elseif ctx.langs.original and (ctx.langs.alpha_mixing ~= false or prefix._alpha ~= false) then
 			prefix[#prefix + 1] = { str = firstchar, type = "alpha" }
 			prefix[#prefix + 1] = { str = secondchar, type = "other" }
 			return M.parser(string.sub(str, 3), prefix, ctx)
@@ -294,7 +354,7 @@ end
 function M.setup(opts)
 	opts = opts or {}
 	if opts.langs then
-		for _, l in ipairs({ "cn", "jp", "original" }) do
+		for _, l in ipairs({ "cn", "jp", "ko", "original", "alpha_mixing" }) do
 			if type(opts.langs[l]) == "boolean" then
 				M.config.langs[l] = opts.langs[l]
 			end

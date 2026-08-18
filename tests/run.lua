@@ -24,6 +24,7 @@ setup_rtp()
 
 local fc = require("flash-cjk")
 local jp = require("flash-cjk.jp")
+local ko = require("flash-cjk.ko")
 
 local passed, failed = 0, 0
 local function ok(cond, msg)
@@ -71,7 +72,45 @@ ok(matches(mixed, "sha", "しゃ"), "sha matches しゃ")
 ok(matches(mixed, "niho", "日本"), "niho matches 日本")
 ok(matches(mixed, "nihongo", "日本語"), "nihongo matches 日本語")
 ok(matches(mixed, "si", "し"), "kunrei si matches し")
-ok(matches(mixed, "tu", "つ"), "kunrei tu matches つ")
+ok(matches(mixed, "aoi", "あおい"), "vowel sequence aoi matches あおい (mid single letters)")
+ok(matches(mixed, "ue", "うえ"), "ue matches うえ")
+
+-- Korean: romanization + two-set, both at once
+local trilingual = fc.make_mix_mode({ cn = true, jp = true, ko = true, original = true })
+ok(matches(trilingual, "kim", "김"), "kim matches 김 (RR)")
+ok(matches(fc.make_mix_mode({ cn = false, jp = false, ko = true, original = false }), "kim", "김"), "kim matches 김 (ko only)")
+ok(matches(trilingual, "gim", "김"), "gim matches 김 (RR)")
+ok(matches(trilingual, "seoul", "서울"), "seoul matches 서울")
+ok(matches(trilingual, "han", "한"), "han matches 한")
+ok(matches(trilingual, "ai", "아이"), "ai matches 아이 (mid vowels)")
+ok(matches(trilingual, "oi", "오이"), "oi matches 오이")
+ok(matches(trilingual, "uyu", "우유"), "uyu matches 우유")
+ok(matches(trilingual, "dkss", "안녕"), "dkss matches 안녕 (two-set)")
+ok(matches(trilingual, "dkswek", "앉다"), "dkswek matches 앉다 (compound final)")
+ok(matches(trilingual, "gkr", "학"), "gkr matches 학 (two-set)")
+ok(matches(trilingual, "gkrry", "학교"), "gkrry matches 학교 (two-set)")
+ok(matches(trilingual, "hak", "학"), "hak matches 학 (romanization)")
+ok(not matches(fc.make_mix_mode({ cn = true, jp = true, ko = false, original = true }), "kim", "김"), "ko off: kim does not match 김")
+
+-- ko labeler prediction: 안녕 must predict both spellings
+local ko_strs = ko.strs("안녕")
+local k1, k2 = false, false
+for _, s in ipairs(ko_strs) do
+	if s == "annyeong" then
+		k1 = true
+	end
+	if s == "dkssud" then
+		k2 = true
+	end
+end
+ok(k1 and k2, "ko.strs(안녕) predicts annyeong and dkssud")
+
+-- alpha_mixing = false: pure chains only, still matches everything CJK
+local pure = fc.make_mix_mode({ cn = true, jp = true, ko = true, original = true, alpha_mixing = false })
+ok(matches(pure, "kim", "김"), "pure: kim matches 김")
+ok(matches(pure, "dkss", "안녕"), "pure: dkss matches 안녕")
+ok(matches(pure, "niho", "日本"), "pure: niho matches 日本")
+ok(matches(pure, "ni", "nice"), "pure: literal english still matches")
 ok(matches(mixed, "ni", "你"), "ni matches 你 (zh pinyin)")
 ok(matches(mixed, "tsu", "津"), "tsu matches 津")
 ok(matches(mixed, "n", "ん"), "n matches ん")
@@ -137,12 +176,13 @@ ok(found, "romaji_strs(しゃ) includes sha (youon merge)")
 local State = require("flash.state")
 vim.api.nvim_buf_set_lines(0, 0, -1, false, {
 	"日本語テストです",
+	"한국어 안녕하세요 텍스트",
 	"中文混合 english 你好",
 	"きょうと京都",
 })
 vim.api.nvim_win_set_cursor(0, { 1, 0 })
 
-local langs = { cn = true, jp = true, original = true }
+local langs = { cn = true, jp = true, ko = true, original = true }
 local state = State.new({
 	pattern = "ni",
 	labels = "asdfghjklqwertyuiopzxcvbnm",

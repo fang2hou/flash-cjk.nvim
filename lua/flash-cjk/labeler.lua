@@ -62,6 +62,9 @@ function M:match_strs(line, start_col, end_col)
 	if self.langs.jp then
 		vim.list_extend(strs, require("flash-cjk.jp").romaji_strs(text))
 	end
+	if self.langs.ko then
+		vim.list_extend(strs, require("flash-cjk.ko").strs(text))
+	end
 	return strs
 end
 
