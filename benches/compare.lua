@@ -1,12 +1,17 @@
 -- Benchmark: vim-regex matcher path vs native Rust matcher path.
 --
--- Measures the honest per-keystroke cost of both implementations on
--- generated mixed-CJK windows:
+-- Measures the honest per-keystroke cost of both implementations across
+-- the full language-combination matrix — every single, pair, triple and
+-- the quad drawn from { zhcn, ja, ko, en } (15 categories):
 --   * vim path  : make_mix_mode(langs)(pattern)  -> regex build +
 --                 vim.regex compile + match_str scan over every line
 --   * rust path : require("flash-cjk.rust").search(pattern, lines, langs)
 --                 (spawns the real flash-cjk-search binary per call,
 --                 exactly like a live keystroke does)
+-- Each category enables ONLY its own languages in the langs flags and
+-- samples window text and keystrokes from those languages' plausible
+-- spellings (the en-only category is pure ASCII words), so singles show
+-- per-language baselines and richer mixes show how the alternation grows.
 --
 -- Usage (from the repo root):
 --   cargo build --release --manifest-path rust/Cargo.toml
@@ -108,7 +113,8 @@ for _ = 1, 600 do
 	ko_pool[#ko_pool + 1] = { char = ch, spell = strs[1] or "a" }
 end
 
--- en: plain ASCII words (code identifiers + prose) for the mixed category
+-- en: plain ASCII words (code identifiers + prose); the en-only category
+-- is pure ASCII, elsewhere they mix into CJK windows
 local en_pool = {
 	"function", "value", "return", "local", "require", "config", "window",
 	"buffer", "label", "match", "pattern", "state", "editor", "cursor",
@@ -117,31 +123,50 @@ local en_pool = {
 	"lazy", "dog", "while", "value", "name", "user", "text", "input",
 }
 
-local POOLS = { zh = zh_pool, jp = jp_pool, ko = ko_pool }
+-- keyed by the canonical language codes used in results.json
+local POOLS = { zhcn = zh_pool, ja = jp_pool, ko = ko_pool }
 
 -- ---------------------------------------------------------------------------
 
-local CATEGORIES = {
-	{ id = "zh_ja", labels = { "zh", "jp" }, cases = 350 },
-	{ id = "ja_ko", labels = { "jp", "ko" }, cases = 350 },
-	{ id = "zh_ja_ko_en", labels = { "zh", "jp", "ko", "en" }, cases = 350 },
+-- The full combination matrix over the four language codes: 4 singles,
+-- 6 pairs, 4 triples, 1 quad = 15 categories x 70 cases = 1,050 cases.
+local CATEGORY_MATRIX = {
+	{ "zhcn" },
+	{ "ja" },
+	{ "ko" },
+	{ "en" },
+	{ "zhcn", "ja" },
+	{ "zhcn", "ko" },
+	{ "zhcn", "en" },
+	{ "ja", "ko" },
+	{ "ja", "en" },
+	{ "ko", "en" },
+	{ "zhcn", "ja", "ko" },
+	{ "zhcn", "ja", "en" },
+	{ "zhcn", "ko", "en" },
+	{ "ja", "ko", "en" },
+	{ "zhcn", "ja", "ko", "en" },
 }
-local CASES_TOTAL = 1050
+local CASES_PER_CATEGORY = 70
+
+local CATEGORIES = {}
+for _, lang_list in ipairs(CATEGORY_MATRIX) do
+	-- langs flags enable ONLY this category's languages; alpha_mixing
+	-- stays on (it is a config flag, not a language)
+	local flags = { zhcn = false, ja = false, ko = false, en = false, alpha_mixing = true }
+	for _, code in ipairs(lang_list) do
+		flags[code] = true
+	end
+	CATEGORIES[#CATEGORIES + 1] = {
+		id = table.concat(lang_list, "+"),
+		langs = lang_list,
+		flags = flags,
+		cases = CASES_PER_CATEGORY,
+	}
+end
+local CASES_TOTAL = CASES_PER_CATEGORY * #CATEGORIES
 local WARMUP_PASSES = 1
 local MEASURED_PASSES = 3
-local langs = { zhcn = true, ja = true, ko = true, en = true, alpha_mixing = true }
-
--- One CJK token: 1-3 chars from one language (words run together in
--- real CJK text, spaces only appear between words/segments).
-local function token(lang)
-	local pool = POOLS[lang]
-	local n = ri(1, 3)
-	local out = {}
-	for i = 1, n do
-		out[i] = pick(pool).char
-	end
-	return table.concat(out)
-end
 
 local function gen_case(cat)
 	local n_lines = ri(20, 60)
@@ -153,7 +178,7 @@ local function gen_case(cat)
 		local n_tokens = ri(4, 14)
 		local parts = {}
 		for t = 1, n_tokens do
-			local lang = pick(cat.labels)
+			local lang = pick(cat.langs)
 			local part
 			if lang == "en" then
 				local w = pick(en_pool)
@@ -228,7 +253,7 @@ local function vim_path(mode, pattern, lines)
 	return (vim.uv.hrtime() - t0) / 1e6
 end
 
-local function rust_path(pattern, lines)
+local function rust_path(pattern, lines, langs)
 	local t0 = vim.uv.hrtime()
 	local resp = rust.search(pattern, lines, langs)
 	local dt = (vim.uv.hrtime() - t0) / 1e6
@@ -269,6 +294,12 @@ end
 
 local function round(x)
 	return math.floor(x * 1000 + 0.5) / 1000
+end
+
+-- ratio of means (vim / rust): below 1 the vim-regex path is faster;
+-- two decimals there, one above, matching gen_svg.py's fmt_x
+local function fmt_ratio(x)
+	return (x < 1 and "%.2f" or "%.1f"):format(x) .. "x"
 end
 
 -- ---------------------------------------------------------------------------
@@ -330,6 +361,9 @@ local results = {
 		seed = 42,
 		cases = CASES_TOTAL,
 		lines_per_case = "20-60",
+		matrix = ("15 combinations (4 singles, 6 pairs, 4 triples, 1 quad) x %d cases each"):format(
+			CASES_PER_CATEGORY
+		),
 		warmup_passes = WARMUP_PASSES,
 		measured_passes = MEASURED_PASSES,
 		statistic = "median of 3 passes, per case",
@@ -349,13 +383,13 @@ for _, cat in ipairs(CATEGORIES) do
 	local vim_failed = 0
 	for _ = 1, cat.cases do
 		local case = gen_case(cat)
-		local mode = fc.make_mix_mode(langs)
+		local mode = fc.make_mix_mode(cat.flags)
 
 		collectgarbage("collect")
 
 		-- warmup
 		vim_path(mode, case.pattern, case.lines)
-		rust_path(case.pattern, case.lines)
+		rust_path(case.pattern, case.lines, cat.flags)
 
 		-- measured passes, alternating implementations to spread any
 		-- thermal / scheduler drift evenly between them; a vim regex
@@ -366,7 +400,7 @@ for _, cat in ipairs(CATEGORIES) do
 			if vt then
 				vtimes[#vtimes + 1] = vt
 			end
-			rtimes[#rtimes + 1] = rust_path(case.pattern, case.lines)
+			rtimes[#rtimes + 1] = rust_path(case.pattern, case.lines, cat.flags)
 		end
 		local rm = median3(rtimes)
 		cat_rust[#cat_rust + 1] = rm
@@ -391,7 +425,7 @@ for _, cat in ipairs(CATEGORIES) do
 	sp = sp / #cat_speedup
 	results.categories[cat.id] = {
 		cases = cat.cases,
-		languages = cat.labels,
+		languages = cat.langs,
 		vim_ms = { mean = round(vs.mean), p50 = round(vs.p50), p95 = round(vs.p95) },
 		rust_ms = { mean = round(rs.mean), p50 = round(rs.p50), p95 = round(rs.p95) },
 		speedup_mean = round(sp),
@@ -440,25 +474,25 @@ out:write(encoded, "\n")
 out:close()
 
 print(("\nwrote benches/results.json (%d s elapsed)"):format(os.time() - t_start))
-print(string.format("%-14s %10s %10s %8s", "category", "vim mean", "rust mean", "speedup"))
+print(string.format("%-16s %10s %10s %9s", "category", "vim mean", "rust mean", "ratio"))
 for _, cat in ipairs(CATEGORIES) do
 	local r = results.categories[cat.id]
 	print(
 		string.format(
-			"%-14s %9.2fms %9.2fms %7.1fx",
+			"%-16s %9.2fms %9.2fms %8s",
 			cat.id,
 			r.vim_ms.mean,
 			r.rust_ms.mean,
-			r.speedup_mean
+			fmt_ratio(r.mean_ratio)
 		)
 	)
 end
 print(
 	string.format(
-		"%-14s %9.2fms %9.2fms %7.1fx",
+		"%-16s %9.2fms %9.2fms %8s",
 		"overall",
 		results.overall.vim_ms.mean,
 		results.overall.rust_ms.mean,
-		results.overall.speedup_mean
+		fmt_ratio(results.overall.mean_ratio)
 	)
 )
