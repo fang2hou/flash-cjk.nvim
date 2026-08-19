@@ -28,9 +28,6 @@ vim.cmd("Lazy load flash-cjk.nvim")
 local fc = require("flash-cjk")
 ok(type(fc.jump) == "function" and type(fc.remote) == "function", "lazy load: flash-cjk module resolves")
 
-local shim_ok, shim = pcall(require, "flash-zh")
-ok(shim_ok and shim == fc, "shim: flash-zh forwards to flash-cjk through lazy rtp")
-
 ok(fc.config.cn == "xiaohe" and fc.config.jp == "roma" and fc.config.ko == "roma", "opts: lazy opts normalized into schemes")
 
 local rust = require("flash-cjk.rust")

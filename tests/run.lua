@@ -454,7 +454,7 @@ do
 end
 
 -- public API surface: remote() entry (shared build_opts incl. rust
--- matcher + patches) and the flash-zh compat shim
+-- matcher + patches)
 do
 	vim.api.nvim_buf_set_lines(0, 0, -1, false, { "日本語テスト ち 梯" })
 	vim.api.nvim_input("<esc>") -- prefed: the remote loop exits on it
@@ -462,11 +462,6 @@ do
 		fc.remote()
 	end)
 	ok(ok_remote, "fc.remote() runs through the shared opts path (" .. tostring(err_remote) .. ")")
-
-	local shim = require("flash-zh")
-	ok(type(shim.jump) == "function" and type(shim.remote) == "function" and type(shim.setup) == "function",
-		"flash-zh shim still forwards the public API")
-	ok(shim == fc, "shim returns the same module table")
 end
 
 -- ---------------------------------------------------------------------------
