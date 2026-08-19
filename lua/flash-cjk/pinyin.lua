@@ -17,26 +17,13 @@ function py_table:find(char)
 	return self[char]
 end
 
-local function get_char_size(char) --获取单个字符长度
-	if not char then
-		return 0
-	elseif char > 240 then
-		return 4
-	elseif char > 225 then
-		return 3
-	elseif char > 192 then
-		return 2
-	else
-		return 1
-	end
-end
+local char_size = require("flash-cjk.util").char_size
 
 local function utf8_len(str) --获取中文字符长度
 	local len = 0
 	local currentIndex = 1
 	while currentIndex <= #str do
-		local char = string.byte(str, currentIndex)
-		currentIndex = currentIndex + get_char_size(char)
+		currentIndex = currentIndex + char_size(str, currentIndex)
 		len = len + 1
 	end
 	return len
@@ -45,16 +32,14 @@ end
 local function utf8_sub(str, startChar, numChars) --截取中文字符串
 	local startIndex = 1
 	while startChar > 1 do
-		local char = string.byte(str, startIndex)
-		startIndex = startIndex + get_char_size(char)
+		startIndex = startIndex + char_size(str, startIndex)
 		startChar = startChar - 1
 	end
 
 	local currentIndex = startIndex
 
 	while numChars > 0 and currentIndex <= #str do
-		local char = string.byte(str, currentIndex)
-		currentIndex = currentIndex + get_char_size(char)
+		currentIndex = currentIndex + char_size(str, currentIndex)
 		numChars = numChars - 1
 	end
 
@@ -109,11 +94,7 @@ function M.pinyin(chars)
 			end
 		end
 	end
-	local result = {}
-	for i = 1, #pinyins do
-		table.insert(result, pinyins[i])
-	end
-	return result
+	return pinyins
 end
 
 init_py_table()

@@ -88,6 +88,17 @@ local T_KEYS = {
 	"v", "g",
 }
 
+-- Exported for scripts/export_rs.lua, which mirrors these tables into
+-- Rust; the Lua arrays remain the single source of truth.
+M.jamo = {
+	l_roma = L_ROMA,
+	v_roma = V_ROMA,
+	t_roma = T_ROMA,
+	l_keys = L_KEYS,
+	v_keys = V_KEYS,
+	t_keys = T_KEYS,
+}
+
 -- ------------------------------------------------------------------
 -- prefix tables: romaji / key prefix -> regex range class
 
@@ -177,19 +188,7 @@ end
 -- ------------------------------------------------------------------
 -- labeler support: all spellings a text could have been typed as
 
-local function char_size(str, i)
-	local b = string.byte(str, i)
-	if not b then
-		return 0
-	elseif b > 240 then
-		return 4
-	elseif b > 225 then
-		return 3
-	elseif b > 192 then
-		return 2
-	end
-	return 1
-end
+local char_size = require("flash-cjk.util").char_size
 
 ---All romaji and two-set key spellings of the given text.
 ---@param text string

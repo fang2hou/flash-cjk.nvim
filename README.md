@@ -147,27 +147,7 @@ Single-language users keep one switch on. Notes:
   McCune-Reischauer spellings (`kim`/`gim` → 김), matched per-syllable by
   prefix; two-set (두벌식) keys work alongside (`dkss` → 안녕, `gkrry` → 학교,
   `dkswek` → 앉다); tense jamo need shift — use romanization (`kk`) instead;
-  single-vowel segments work mid-input like Japanese vowels (`ai` → 아이).
-
-### Custom match characters
-
-Override or append to the default punctuation/character maps:
-
-```lua
-require('flash-cjk').setup {
-    char_map = {
-        comma = {
-            [']'] = ']」',   -- override a default flypy.comma entry
-            ['!'] = '!！',   -- add a symbol the default table lacks
-        },
-        append_comma = { ['.'] = '…' },
-        append_char1 = { ['a'] = 'äÄ' },
-        append_char2 = {},
-    }
-}
-```
-
-## Rust acceleration (optional)
+  single-vowel segments work mid-input like Japanese vowels (`ai` → 아이).\n\n## Rust acceleration (optional)
 
 An optional native matcher builds once and turns on automatically: long-input
 per-keystroke latency drops from 55–80 ms to 1–3 ms (3.8×–76× over the
