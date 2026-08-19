@@ -44,7 +44,7 @@ local function build_opts(langs, opts)
 	local keys = vim.tbl_deep_extend("force", {}, M.config.force_keys, opts.force_keys or {})
 	local mode = M.make_mix_mode(langs, keys)
 	local actions = {}
-	for _, lang in ipairs({ "cn", "jp", "ko", "en" }) do
+	for _, lang in ipairs({ "zhcn", "ja", "ko", "en" }) do
 		local key = keys[lang]
 		if type(key) == "string" and key ~= "" then
 			local marker = match.MARKER_BYTES[lang]
@@ -82,30 +82,30 @@ local function build_opts(langs, opts)
 end
 
 ---Starts a flash jump with CJK matching.
----@param langs string[]? language codes for this jump, e.g. { "cn", "en" }
+---@param langs string[]? language codes for this jump, e.g. { "zhcn", "en" }
 ---@param opts table? flash options (plus force_keys)
 function M.jump(langs, opts)
 	get_flash().jump(build_opts(M.resolve_langs(langs), opts or {}))
 end
 
 ---Starts a flash remote (operator-pending) jump with CJK matching.
----@param langs string[]? language codes for this jump, e.g. { "cn", "en" }
+---@param langs string[]? language codes for this jump, e.g. { "zhcn", "en" }
 ---@param opts table? flash options (plus force_keys)
 function M.remote(langs, opts)
 	get_flash().remote(build_opts(M.resolve_langs(langs), opts or {}))
 end
 
 -- @param opts table
--- @field[opt] opts.cn boolean|string Chinese matching: true (default scheme "xiaohe"), false, or a scheme name.
--- @field[opt] opts.jp boolean|string Japanese matching: true (default scheme "roma"), false, or a scheme name.
+-- @field[opt] opts.zhcn boolean|string Chinese matching: true (default scheme "xiaohe"), false, or a scheme name.
+-- @field[opt] opts.ja boolean|string Japanese matching: true (default scheme "roma"), false, or a scheme name.
 -- @field[opt] opts.ko boolean|string Korean matching: true (default scheme "roma"), false, or a scheme name.
 -- @field[opt] opts.en boolean Literal ASCII letter matching.
 -- @field[opt] opts.alpha_mixing boolean Allow mixing literal letters into language chains.
--- @field opts.force_keys table Language-lock keys, e.g. { cn = "<C-c>" }; false disables one.
+-- @field opts.force_keys table Language-lock keys, e.g. { zhcn = "<C-c>" }; false disables one.
 function M.setup(opts)
 	opts = opts or {}
 	local dirty = false
-	for _, lang in ipairs({ "cn", "jp", "ko" }) do
+	for _, lang in ipairs({ "zhcn", "ja", "ko" }) do
 		if opts[lang] ~= nil then
 			M.config[lang] = config.normalize_lang(lang, opts[lang])
 			dirty = true
@@ -122,7 +122,7 @@ function M.setup(opts)
 	end
 	if opts.force_keys then
 		for lang, key in pairs(opts.force_keys) do
-			if vim.list_contains({ "cn", "jp", "ko", "en" }, lang) then
+			if vim.list_contains({ "zhcn", "ja", "ko", "en" }, lang) then
 				M.config.force_keys[lang] = key -- string key, or false to disable
 			end
 		end

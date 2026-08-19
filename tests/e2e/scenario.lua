@@ -28,7 +28,7 @@ vim.cmd("Lazy load flash-cjk.nvim")
 local fc = require("flash-cjk")
 ok(type(fc.jump) == "function" and type(fc.remote) == "function", "lazy load: flash-cjk module resolves")
 
-ok(fc.config.cn == "xiaohe" and fc.config.jp == "roma" and fc.config.ko == "roma", "opts: lazy opts normalized into schemes")
+ok(fc.config.zhcn == "xiaohe" and fc.config.ja == "roma" and fc.config.ko == "roma", "opts: lazy opts normalized into schemes")
 
 local rust = require("flash-cjk.rust")
 local no_rust = os.getenv("FLASH_CJK_E2E_NO_RUST") == "1"
@@ -148,7 +148,7 @@ end
 -- rust path silently return zero matches with no vim-regex fallback
 if not no_rust then
   do
-    local matcher = rust.matcher({ cn = true, jp = true, ko = true, en = true })
+    local matcher = rust.matcher({ zhcn = true, ja = true, ko = true, en = true })
     local fake = {
       pattern = {
         pattern = "ti",

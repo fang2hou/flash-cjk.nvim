@@ -26,9 +26,9 @@ struct Request {
 #[serde(default)]
 struct LangsSpec {
     #[serde(default = "default_true")]
-    cn: bool,
+    zhcn: bool,
     #[serde(default = "default_true")]
-    jp: bool,
+    ja: bool,
     #[serde(default = "default_true")]
     ko: bool,
     #[serde(default = "default_true")]
@@ -44,8 +44,8 @@ fn default_true() -> bool {
 impl From<LangsSpec> for Langs {
     fn from(s: LangsSpec) -> Self {
         Langs {
-            cn: s.cn,
-            jp: s.jp,
+            zhcn: s.zhcn,
+            ja: s.ja,
             ko: s.ko,
             en: s.en,
             alpha_mixing: s.alpha_mixing,

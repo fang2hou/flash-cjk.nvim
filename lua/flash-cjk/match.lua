@@ -32,7 +32,7 @@ local MAX_SEGMENTATIONS = 600
 -- punctuation
 
 local comma_cache = {} ---@type table<string, table<string,string>>
--- The cache key encodes the cn/jp flags, the tables' only inputs, so
+-- The cache key encodes the zhcn/ja flags, the tables' only inputs, so
 -- entries self-invalidate when setup() changes the enabled languages.
 
 -- Effective punctuation map: each enabled language contributes its own
@@ -47,12 +47,12 @@ local function merge_class(a, b)
 end
 
 local function comma_map(langs)
-	local key = (langs.cn and "z" or "-") .. (langs.jp and "j" or "-")
+	local key = (langs.zhcn and "z" or "-") .. (langs.ja and "j" or "-")
 	local map = comma_cache[key]
 	if not map then
 		map = {}
-		local cn_tbl = langs.cn and zhcn.comma or {}
-		local ja_tbl = langs.jp and get_ja().comma or {}
+		local cn_tbl = langs.zhcn and zhcn.comma or {}
+		local ja_tbl = langs.ja and get_ja().comma or {}
 		for _, src in ipairs({ cn_tbl, ja_tbl }) do
 			for k, v in pairs(src) do
 				map[k] = merge_class(map[k], v)
@@ -153,12 +153,12 @@ local function parser(str, prefix, ctx)
 				p1[#p1 + 1] = { str = firstchar, type = "alpha" }
 				results = merge_table(results, parser("", p1, ctx))
 			end
-			if ctx.langs.cn then
+			if ctx.langs.zhcn then
 				local p2 = copy(prefix)
 				p2[#p2 + 1] = { str = firstchar, type = "singlepin" }
 				results = merge_table(results, parser("", p2, ctx))
 			end
-			if ctx.langs.jp and get_ja().pattern(firstchar) then
+			if ctx.langs.ja and get_ja().pattern(firstchar) then
 				local p3 = copy(prefix)
 				p3[#p3 + 1] = { str = firstchar, type = "jp" }
 				results = merge_table(results, parser("", p3, ctx))
@@ -178,13 +178,13 @@ local function parser(str, prefix, ctx)
 			-- interpretation (prefix._alpha): mixed chains multiply the
 			-- alternatives and each giant CJK character class makes vim's
 			-- regex execution measurably slower.
-			if ctx.langs.cn and zhcn.char2patterns[firstchar .. secondchar] then
+			if ctx.langs.zhcn and zhcn.char2patterns[firstchar .. secondchar] then
 				local p = copy(prefix)
 				p._alpha = false
 				p[#p + 1] = { str = firstchar .. secondchar, type = "pinyin" }
 				results = merge_table(results, parser(string.sub(str, 3), p, ctx))
 			end
-			if ctx.langs.jp then
+			if ctx.langs.ja then
 				local J = get_ja()
 				local two = firstchar .. secondchar
 				local three = two .. thirdchar
@@ -276,7 +276,7 @@ end
 -- the pressed keys: C-j itself (\n) can never enter the pattern because
 -- flash writes the pattern into its prompt buffer, which rejects
 -- newlines. All marker bytes are buffer-safe control characters.
-M.MARKER_BYTES = { cn = "\x01", jp = "\x02", ko = "\x04", en = "\x05" }
+M.MARKER_BYTES = { zhcn = "\x01", ja = "\x02", ko = "\x04", en = "\x05" }
 
 ---Returns the marker table for the enabled force_keys.
 ---@param force_keys table lang -> key string (or false to disable)
@@ -301,7 +301,7 @@ end
 ---@param pattern string
 ---@param force_keys table? overrides the configured force_keys
 ---@return string clean
----@return string? forced "cn" | "jp" | "ko" | "en"
+---@return string? forced "zhcn" | "ja" | "ko" | "en"
 function M.parse_forced(pattern, force_keys)
 	local markers = markers_from_config(force_keys or config.config.force_keys)
 	if not markers.strip then
@@ -323,8 +323,8 @@ end
 
 local function forced_langs(base, forced)
 	return {
-		cn = forced == "cn",
-		jp = forced == "jp",
+		zhcn = forced == "zhcn",
+		ja = forced == "ja",
 		ko = forced == "ko",
 		en = forced == "en" or base.en,
 		alpha_mixing = base.alpha_mixing,

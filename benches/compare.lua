@@ -129,7 +129,7 @@ local CATEGORIES = {
 local CASES_TOTAL = 1050
 local WARMUP_PASSES = 1
 local MEASURED_PASSES = 3
-local langs = { cn = true, jp = true, ko = true, en = true, alpha_mixing = true }
+local langs = { zhcn = true, ja = true, ko = true, en = true, alpha_mixing = true }
 
 -- One CJK token: 1-3 chars from one language (words run together in
 -- real CJK text, spaces only appear between words/segments).
@@ -313,7 +313,7 @@ do
 	local tiny = vim.json.encode({
 		pattern = "a",
 		lines = { "a" },
-		langs = { cn = true, jp = true, ko = true, en = true, alpha_mixing = true },
+		langs = { zhcn = true, ja = true, ko = true, en = true, alpha_mixing = true },
 	})
 	startup_ms = med(function()
 		vim.system({ bin }, { stdin = tiny }):wait()

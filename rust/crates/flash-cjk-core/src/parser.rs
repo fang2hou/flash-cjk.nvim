@@ -1,5 +1,5 @@
 //! Pattern segmentation: compiles a typed input pattern into every
-//! plausible sequence of segments, mirroring lua/flash-cjk/init.lua's
+//! plausible sequence of segments, mirroring lua/flash-cjk/match.lua's
 //! `parser` semantics (segment kinds, vowel whitelisting, alpha-chain
 //! rule, mid-input language-lock markers, segmentation budget).
 
@@ -11,8 +11,8 @@ include!("data/punct.rs");
 /// Language flags for one search.
 #[derive(Debug, Clone, Copy)]
 pub struct Langs {
-    pub cn: bool,
-    pub jp: bool,
+    pub zhcn: bool,
+    pub ja: bool,
     pub ko: bool,
     pub en: bool,
     pub alpha_mixing: bool,
@@ -21,8 +21,8 @@ pub struct Langs {
 impl Default for Langs {
     fn default() -> Self {
         Langs {
-            cn: true,
-            jp: true,
+            zhcn: true,
+            ja: true,
             ko: true,
             en: true,
             alpha_mixing: true,
@@ -66,8 +66,8 @@ pub struct Alt {
 
 /// Internal lock markers (mirror of `MARKER_BYTES` in init.lua; the
 /// pressed keys are decoupled from these bytes on the Lua side).
-pub const MARKER_CN: char = '\u{1}';
-pub const MARKER_JP: char = '\u{2}';
+pub const MARKER_ZHCN: char = '\u{1}';
+pub const MARKER_JA: char = '\u{2}';
 pub const MARKER_KO: char = '\u{4}';
 pub const MARKER_EN: char = '\u{5}';
 
@@ -82,7 +82,7 @@ pub fn parse_forced(pattern: &str) -> (String, Option<char>) {
     let mut best: Option<char> = None;
     let mut clean = String::with_capacity(pattern.len());
     for (pos, c) in pattern.char_indices() {
-        let is_marker = matches!(c, MARKER_CN | MARKER_JP | MARKER_KO | MARKER_EN);
+        let is_marker = matches!(c, MARKER_ZHCN | MARKER_JA | MARKER_KO | MARKER_EN);
         if is_marker {
             if pos >= best_pos {
                 best_pos = pos;
@@ -114,12 +114,12 @@ fn comma_classes(langs: &Langs) -> Vec<(char, CharSet)> {
         }
     }
     let mut out: Vec<(char, CharSet)> = Vec::new();
-    if langs.cn {
+    if langs.zhcn {
         for entry in PUNCT_CN {
             merge(&mut out, entry);
         }
     }
-    if langs.jp {
+    if langs.ja {
         for entry in PUNCT_JP {
             merge(&mut out, entry);
         }
@@ -181,7 +181,7 @@ impl<'a> Compiler<'a> {
                     });
                     self.parse("", s, alpha_ok);
                 }
-                if self.langs.cn
+                if self.langs.zhcn
                     && let Some(cs) = self.d.cn_char1.get(first.encode_utf8(&mut [0u8; 4]))
                 {
                     let mut s = segs.clone();
@@ -192,7 +192,7 @@ impl<'a> Compiler<'a> {
                     });
                     self.parse("", s, false);
                 }
-                if self.langs.jp
+                if self.langs.ja
                     && let Some(cs) = self.d.jp_p1.get(f1.as_str())
                 {
                     let mut s = segs.clone();
@@ -218,8 +218,8 @@ impl<'a> Compiler<'a> {
                 let f2 = first.to_string();
                 let two: String = [first, second].iter().collect();
                 let three: String = [first, second, third].iter().collect();
-                // cn flypy (2 keys)
-                if self.langs.cn && self.d.cn_char2.contains_key(two.as_str()) {
+                // zhcn flypy (2 keys)
+                if self.langs.zhcn && self.d.cn_char2.contains_key(two.as_str()) {
                     let cs = self.d.cn_char2[two.as_str()].clone();
                     let mut s = segs.clone();
                     s.push(Segment {
@@ -229,8 +229,8 @@ impl<'a> Compiler<'a> {
                     });
                     self.parse(tail3, s, false);
                 }
-                // jp 3-letter
-                if self.langs.jp && third.is_ascii_alphabetic() {
+                // ja 3-letter
+                if self.langs.ja && third.is_ascii_alphabetic() {
                     if let Some(cs) = self.d.jp_p3_class.get(three.as_str()) {
                         let cs = cs.clone();
                         let mut s = segs.clone();
@@ -254,8 +254,8 @@ impl<'a> Compiler<'a> {
                         self.parse(tail4, s, false);
                     }
                 }
-                // jp 2-letter
-                if self.langs.jp && self.d.jp_p2.contains_key(two.as_str()) {
+                // ja 2-letter
+                if self.langs.ja && self.d.jp_p2.contains_key(two.as_str()) {
                     let cs = self.d.jp_p2[two.as_str()].clone();
                     let mut s = segs.clone();
                     s.push(Segment {
@@ -265,8 +265,8 @@ impl<'a> Compiler<'a> {
                     });
                     self.parse(tail3, s, false);
                 }
-                // jp 1-letter mid-pattern: vowels + n only
-                if self.langs.jp
+                // ja 1-letter mid-pattern: vowels + n only
+                if self.langs.ja
                     && matches!(first, 'a' | 'e' | 'i' | 'o' | 'u' | 'n')
                     && self.d.jp_p1.contains_key(f2.as_str())
                 {
@@ -386,8 +386,8 @@ pub fn compile(pattern: &str, base: Langs) -> Vec<Alt> {
     // matchers off but keeps the base `en` (literal) flag; an en
     // lock forces literal matching on.
     let langs = marker.map_or(base, |m| Langs {
-        cn: m == MARKER_CN,
-        jp: m == MARKER_JP,
+        zhcn: m == MARKER_ZHCN,
+        ja: m == MARKER_JA,
         ko: m == MARKER_KO,
         en: m == MARKER_EN || base.en,
         alpha_mixing: base.alpha_mixing,
@@ -429,10 +429,10 @@ mod tests {
     fn forced_parsing() {
         let (clean, m) = parse_forced("ti\u{1}");
         assert_eq!(clean, "ti");
-        assert_eq!(m, Some(MARKER_CN));
+        assert_eq!(m, Some(MARKER_ZHCN));
         let (clean, m) = parse_forced("ti\u{1}\u{2}");
         assert_eq!(clean, "ti");
-        assert_eq!(m, Some(MARKER_JP), "rightmost marker wins");
+        assert_eq!(m, Some(MARKER_JA), "rightmost marker wins");
         let (clean, forced) = parse_forced("ti");
         assert_eq!(clean, "ti");
         assert!(forced.is_none());

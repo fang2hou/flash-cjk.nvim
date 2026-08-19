@@ -63,8 +63,8 @@ require("lazy").setup({
         { "s", mode = { "n", "x", "o" }, function() require("flash-cjk").jump() end, desc = "Flash CJK jump" },
       },
       opts = {
-        cn = true,
-        jp = true,
+        zhcn = true,
+        ja = true,
         ko = true,
         en = true,
       },

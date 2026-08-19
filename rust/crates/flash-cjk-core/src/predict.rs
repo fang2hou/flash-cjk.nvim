@@ -86,10 +86,10 @@ fn engine_spellings(text: &str, engine: Engine, capped: bool) -> Vec<String> {
 /// the Lua labeler does (no cross-language combinations).
 pub fn spellings(text: &str, langs: &crate::parser::Langs) -> Vec<String> {
     let mut out = Vec::new();
-    if langs.cn {
+    if langs.zhcn {
         out.extend(engine_spellings(text, Engine::Cn, false));
     }
-    if langs.jp {
+    if langs.ja {
         out.extend(engine_spellings(text, Engine::Jp, true));
     }
     if langs.ko {

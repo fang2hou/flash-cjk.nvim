@@ -11,7 +11,7 @@ if not rust.available() then
 	return
 end
 
-local langs = { cn = true, jp = true, ko = true, en = true }
+local langs = { zhcn = true, ja = true, ko = true, en = true }
 
 local lines = {
 	"日本語テスト ちちはち 梯子 한국어 안녕하세요",

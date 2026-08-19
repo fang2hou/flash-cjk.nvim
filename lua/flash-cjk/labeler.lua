@@ -10,7 +10,7 @@ function M.new(state, langs, force_keys)
 	local self
 	self = setmetatable({}, M)
 	self.state = state
-	self.langs = langs or { cn = true, jp = true, ko = true, en = true }
+	self.langs = langs or { zhcn = true, ja = true, ko = true, en = true }
 	self.force_keys = force_keys
 	self.used = {}
 	self:reset()
@@ -46,10 +46,10 @@ function M:match_strs(line, start_col, end_col, langs)
 	local size = char_size(line, end_col + 1)
 	local text = string.sub(line, start_col, end_col + size)
 	local strs = {}
-	if langs.cn then
+	if langs.zhcn then
 		vim.list_extend(strs, zhcnRev.pinyin(text))
 	end
-	if langs.jp then
+	if langs.ja then
 		vim.list_extend(strs, require("flash-cjk.ja").romaji_strs(text))
 	end
 	if langs.ko then
@@ -66,7 +66,7 @@ function M:skip(win, labels)
 	local prefix_len = string.len(prefix)
 	local langs = self.langs
 	if forced then
-		langs = { cn = forced == "cn", jp = forced == "jp", ko = forced == "ko" }
+		langs = { zhcn = forced == "zhcn", ja = forced == "ja", ko = forced == "ko" }
 	end
 	-- The per-match filter loops below cumulatively remove every label
 	-- that equals a predicted next letter of ANY match: collect the
