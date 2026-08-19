@@ -412,6 +412,42 @@ do
 			end
 			vim.api.nvim_win_set_cursor(0, { 1, 0 })
 		end
+
+		-- scrolled window regression: the visible slice starts at
+		-- line("w0") > 1, so relative line indices must be converted to
+		-- absolute buffer lines (before the fix every match was dropped
+		-- by flash's from/to filter and jump exited with zero results)
+		do
+			local slines = {}
+			for i = 1, 120 do
+				slines[i] = (i % 7 == 0) and ("row " .. i .. " 日本語テスト ち 梯") or ("filler " .. i)
+			end
+			vim.api.nvim_buf_set_lines(0, 0, -1, false, slines)
+			vim.api.nvim_win_set_cursor(0, { 60, 0 })
+			vim.cmd("normal! zt") -- scroll: visible top is now line 60
+			local w0 = vim.fn.line("w0")
+			ok(w0 > 1, "scrolled setup: window top is past line 1 (w0=" .. w0 .. ")")
+			local base_s = {
+				pattern = "ti",
+				labels = "asdfghjkl",
+				search = { mode = fc.make_mix_mode(langs_r, fc.config.force_keys) },
+				labeler = function() end,
+			}
+			local st_d = State.new(vim.tbl_deep_extend("force", base_s, { matcher = nil }))
+			local st_r = State.new(vim.tbl_deep_extend("force", base_s, { matcher = rust.matcher(langs_r) }))
+			local function lines_set(st)
+				local t = {}
+				for _, mm in ipairs(st.results) do
+					t[#t + 1] = mm.pos[1] .. ":" .. mm.pos[2]
+				end
+				table.sort(t)
+				return table.concat(t, ",")
+			end
+			ok(#st_r.results > 0, "scrolled window: rust matcher returns visible matches")
+			ok(lines_set(st_r) == lines_set(st_d), "scrolled window: rust spans (absolute lines) match default searcher")
+			vim.api.nvim_win_set_cursor(0, { 1, 0 })
+			vim.cmd("normal! gg")
+		end
 	else
 		print("note: rust binary not built, skipping rust path tests")
 	end

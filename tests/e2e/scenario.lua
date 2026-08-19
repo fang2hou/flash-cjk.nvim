@@ -121,4 +121,28 @@ else
   ok(false, "jump ti+C-j: no state captured")
 end
 
+-- scrolled window: the exact user-reported regression -- jump must find
+-- matches when the visible slice starts below line 1
+do
+  local slines = {}
+  for i = 1, 120 do
+    slines[i] = (i % 7 == 0) and ("row " .. i .. " 日本語テスト ち 梯") or ("filler " .. i)
+  end
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, slines)
+  lines = slines
+  vim.api.nvim_win_set_cursor(0, { 60, 0 })
+  vim.cmd("normal! zt")
+  last_state = nil
+  local ok_s, err_s = run("ti<cr>")
+  ok(ok_s and err_s == nil, "scrolled jump: loop completed without error" .. (err_s and (": " .. tostring(err_s)) or ""))
+  if last_state and last_state.results then
+    ok(#last_state.results > 0, "scrolled jump: matches found below line 1")
+    local crow2, ccol2 = unpack(vim.api.nvim_win_get_cursor(0))
+    local ch2 = slines[crow2] and slines[crow2]:sub(ccol2 + 1, ccol2 + 3) or ""
+    ok(ch2 == "ち" or ch2 == "梯", "scrolled jump: cursor landed on a matched char (got " .. ch2 .. ")")
+  else
+    ok(false, "scrolled jump: no state captured")
+  end
+end
+
 finish()
