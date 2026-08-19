@@ -450,7 +450,10 @@ local function build_opts(opts)
 	-- C-c language lock is actually configured; everything else keeps
 	-- flash's original behavior.
 	get_char_patch()
-	return vim.tbl_deep_extend("force", {
+	-- Rust fast path: when the binary exists it replaces the vim-regex
+	-- searcher entirely; per-keystroke failures fall back to the default
+	-- searcher inside the bridge (see lua/flash-cjk/rust.lua)
+	local defaults = {
 		labels = "asdfghjklqwertyuiopzxcvbnm",
 		search = {
 			mode = mode,
@@ -459,7 +462,12 @@ local function build_opts(opts)
 		labeler = function(_, state)
 			require("flash-cjk.labeler").new(state, langs, keys):update()
 		end,
-	}, opts)
+	}
+	local rust_ok, rust = pcall(require, "flash-cjk.rust")
+	if rust_ok and rust.available() then
+		defaults.matcher = rust.matcher(langs)
+	end
+	return vim.tbl_deep_extend("force", defaults, opts)
 end
 
 function M.jump(opts)

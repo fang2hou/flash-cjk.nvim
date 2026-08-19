@@ -1,0 +1,108 @@
+#![forbid(unsafe_code)]
+
+//! flash-cjk-search: stdin/stdout JSON matcher for flash-cjk.nvim.
+//!
+//! Protocol: one JSON request on stdin, one JSON response on stdout.
+//! Request:  {"pattern": "ti", "lines": ["..", ".."], "langs": {...}}
+//! Response: {"matches": [[line, byte_col, byte_len], ...]}
+
+use std::io::{self, Read, Write};
+
+use anyhow::Context;
+use flash_cjk_core::{matches, Langs};
+use serde::{Deserialize, Serialize};
+
+#[derive(Deserialize)]
+struct Request {
+    pattern: String,
+    lines: Vec<String>,
+    #[serde(default)]
+    langs: LangsSpec,
+}
+
+/// Language flags; absent fields default to enabled (mirrors the Lua
+/// config defaults).
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct LangsSpec {
+    #[serde(default = "default_true")]
+    cn: bool,
+    #[serde(default = "default_true")]
+    jp: bool,
+    #[serde(default = "default_true")]
+    ko: bool,
+    #[serde(default = "default_true")]
+    original: bool,
+    #[serde(default = "default_true")]
+    alpha_mixing: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl From<LangsSpec> for Langs {
+    fn from(s: LangsSpec) -> Self {
+        Langs {
+            cn: s.cn,
+            jp: s.jp,
+            ko: s.ko,
+            original: s.original,
+            alpha_mixing: s.alpha_mixing,
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct Response {
+    /// (line index, byte column, last-char byte column, byte length)
+    matches: Vec<[usize; 4]>,
+    /// per-match predicted next letters (may be empty)
+    predictions: Vec<String>,
+}
+
+fn run() -> anyhow::Result<()> {
+    let mut input = String::new();
+    io::stdin()
+        .read_to_string(&mut input)
+        .context("reading request from stdin")?;
+    let req: Request = serde_json::from_str(&input).context("parsing request JSON")?;
+    let line_refs: Vec<&str> = req.lines.iter().map(String::as_str).collect();
+    let langs = Langs::from(req.langs);
+    let found = matches(&req.pattern, &line_refs, langs);
+    // labeler prediction per match: the matched text plus the character
+    // right after it (mirrors labeler.match_strs on the Lua side)
+    let (clean, _) = flash_cjk_core::parser::parse_forced(&req.pattern);
+    let predictions: Vec<String> = found
+        .iter()
+        .map(|m| {
+            let line = &req.lines[m.line];
+            let start = m.col;
+            let end = m.col + m.len;
+            let next_end = line[end..]
+                .chars()
+                .next()
+                .map(|c| end + c.len_utf8())
+                .unwrap_or(end);
+            let text = &line[start..next_end];
+            flash_cjk_core::predict::next_letters(&clean, text, &langs)
+                .into_iter()
+                .collect::<String>()
+        })
+        .collect();
+    let resp = Response {
+        matches: found
+            .into_iter()
+            .map(|m| [m.line, m.col, m.end_col, m.len])
+            .collect(),
+        predictions,
+    };
+    let mut out = io::stdout().lock();
+    serde_json::to_writer(&mut out, &resp).context("writing response")?;
+    out.write_all(b"\n").ok();
+    Ok(())
+}
+
+fn main() -> anyhow::Result<()> {
+    run()
+}

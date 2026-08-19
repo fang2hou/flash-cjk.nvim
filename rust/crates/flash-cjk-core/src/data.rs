@@ -1,0 +1,321 @@
+//! Static matcher data: generated tables (embedded at compile time) plus
+//! the Korean tables derived arithmetically at first use.
+//!
+//! The generated files are produced by `scripts/export_rs.lua` from the
+//! Lua data modules -- the Lua side stays the single source of truth.
+
+use std::collections::HashMap;
+use std::sync::LazyLock;
+
+use crate::charset::CharSet;
+
+include!("../../../data/flypy.rs");
+include!("../../../data/jp_data.rs");
+
+/// Korean romanization / two-set tables, mirroring lua/flash-cjk/ko.lua
+/// (index-aligned by 0-based L/V/T; cross-validated by tests).
+const KO_L_ROMA: [&[&str]; 19] = [
+    &["g", "k"],
+    &["kk"],
+    &["n"],
+    &["d", "t"],
+    &["tt"],
+    &["r", "l"],
+    &["m"],
+    &["b", "p"],
+    &["pp"],
+    &["s"],
+    &["ss"],
+    &[""],
+    &["j"],
+    &["jj"],
+    &["ch"],
+    &["k"],
+    &["t"],
+    &["p"],
+    &["h"],
+];
+const KO_V_ROMA: [&str; 21] = [
+    "a", "ae", "ya", "yae", "eo", "e", "yeo", "ye", "o", "wa", "wae", "oe", "yo", "u", "wo", "we",
+    "wi", "yu", "eu", "ui", "i",
+];
+const KO_T_ROMA: [&str; 28] = [
+    "", "k", "k", "ks", "n", "nj", "nh", "t", "l", "lg", "lm", "lb", "ls", "lt", "lp", "lh", "m",
+    "p", "ps", "s", "s", "ng", "t", "t", "k", "t", "p", "t",
+];
+// two-set keys; None = tense (shift) jamo, unreachable on a lowercase layout
+const KO_L_KEYS: [Option<&str>; 19] = [
+    Some("r"),
+    None,
+    Some("s"),
+    Some("e"),
+    None,
+    Some("f"),
+    Some("a"),
+    Some("q"),
+    None,
+    Some("t"),
+    None,
+    Some("d"),
+    Some("w"),
+    None,
+    Some("c"),
+    Some("z"),
+    Some("x"),
+    Some("v"),
+    Some("g"),
+];
+const KO_V_KEYS: [Option<&str>; 21] = [
+    Some("k"),
+    Some("o"),
+    Some("i"),
+    None,
+    Some("j"),
+    Some("p"),
+    Some("u"),
+    None,
+    Some("h"),
+    Some("hk"),
+    Some("ho"),
+    Some("hl"),
+    Some("y"),
+    Some("n"),
+    Some("nj"),
+    Some("np"),
+    Some("nl"),
+    Some("b"),
+    Some("m"),
+    Some("ml"),
+    Some("l"),
+];
+const KO_T_KEYS: [Option<&str>; 28] = [
+    Some(""),
+    Some("r"),
+    None,
+    Some("rt"),
+    Some("s"),
+    Some("sw"),
+    Some("sg"),
+    Some("e"),
+    Some("f"),
+    Some("fr"),
+    Some("fa"),
+    Some("fq"),
+    Some("ft"),
+    Some("fx"),
+    Some("fv"),
+    Some("fg"),
+    Some("a"),
+    Some("q"),
+    Some("qt"),
+    Some("t"),
+    None,
+    Some("d"),
+    Some("w"),
+    Some("c"),
+    Some("z"),
+    Some("x"),
+    Some("v"),
+    Some("g"),
+];
+
+const SYL_BASE: u32 = 0xAC00;
+
+/// Compound final indices (0-based T) kept by the two-set layout.
+#[cfg(test)]
+const KO_COMPOUND_FINALS: [usize; 11] = [3, 5, 6, 9, 10, 11, 12, 13, 14, 15, 18];
+
+impl Data {
+    /// Japanese readings (spellings) of a kanji/kana character.
+    pub fn jp_readings(&self, ch: char) -> Option<&Vec<String>> {
+        self.jp_readings_map.get(&ch)
+    }
+    pub fn ko_l_roma(&self, l: usize) -> &[&str] {
+        KO_L_ROMA[l]
+    }
+    pub fn ko_v_roma(&self, v: usize) -> &'static str {
+        KO_V_ROMA[v]
+    }
+    pub fn ko_t_roma(&self, t: usize) -> &'static str {
+        KO_T_ROMA[t]
+    }
+    pub fn ko_key_seq(&self, l: usize, v: usize, t: usize) -> Option<String> {
+        ko_key_seq(l, v, t)
+    }
+}
+
+pub struct Data {
+    pub jp_readings_map: HashMap<char, Vec<String>>,
+    pub cn_char1: HashMap<&'static str, CharSet>,
+    pub cn_char2: HashMap<&'static str, CharSet>,
+    pub jp_p1: HashMap<&'static str, CharSet>,
+    pub jp_p2: HashMap<&'static str, CharSet>,
+    pub jp_p3_class: HashMap<&'static str, CharSet>,
+    pub jp_p3_lit: HashMap<&'static str, Vec<&'static str>>,
+    /// Korean prefix -> merged code point ranges (romanization + two-set).
+    pub ko: HashMap<String, CharSet>,
+}
+
+fn build_map(statics: &[(&'static str, &'static str)]) -> HashMap<&'static str, CharSet> {
+    statics
+        .iter()
+        .map(|(k, v)| (*k, CharSet::from_chars(v)))
+        .collect()
+}
+
+fn build_lit(statics: &[(&'static str, &'static str)]) -> HashMap<&'static str, Vec<&'static str>> {
+    // entries sharing a key arrive as separate tuples: group them, owned
+    let mut out: HashMap<&'static str, Vec<&'static str>> = HashMap::new();
+    for (k, v) in statics {
+        out.entry(k).or_default().push(v);
+    }
+    out
+}
+
+fn ko_key_seq(l: usize, v: usize, t: usize) -> Option<String> {
+    let lk = KO_L_KEYS[l]?;
+    let vk = KO_V_KEYS[v]?;
+    if t == 0 {
+        return Some(format!("{lk}{vk}"));
+    }
+    let tk = KO_T_KEYS[t]?; // Some("") only occurs at index 0 (empty final)
+    Some(format!("{lk}{vk}{tk}"))
+}
+
+fn build_ko() -> HashMap<String, CharSet> {
+    // prefix -> set of matching syllable code points (same construction as
+    // lua/flash-cjk/ko.lua build(): every syllable contributes the 1..=4
+    // letter prefixes of each of its romaji spellings and its key sequence)
+    let mut sets: HashMap<String, Vec<u32>> = HashMap::new();
+    fn add(roma: &str, cp: u32, sets: &mut HashMap<String, Vec<u32>>) {
+        let max = roma.len().min(4);
+        for p in 1..=max {
+            sets.entry(roma[..p].to_string()).or_default().push(cp);
+        }
+    }
+    for (l, lromas) in KO_L_ROMA.iter().enumerate() {
+        for (v, vroma) in KO_V_ROMA.iter().enumerate() {
+            for (t, troma) in KO_T_ROMA.iter().enumerate() {
+                let cp = SYL_BASE + (l * 588 + v * 28 + t) as u32;
+                for lroma in lromas.iter() {
+                    add(&format!("{lroma}{vroma}{troma}"), cp, &mut sets);
+                }
+                if let Some(ks) = ko_key_seq(l, v, t) {
+                    add(&ks, cp, &mut sets);
+                }
+            }
+        }
+    }
+    sets.into_iter()
+        .map(|(k, mut cps)| {
+            cps.sort_unstable();
+            cps.dedup();
+            // merge consecutive code points into inclusive ranges
+            let mut ranges: Vec<(u32, u32)> = Vec::new();
+            for cp in cps {
+                match ranges.last_mut() {
+                    Some(last) if last.1 + 1 == cp => last.1 = cp,
+                    _ => ranges.push((cp, cp)),
+                }
+            }
+            (k, CharSet::Ranges(ranges))
+        })
+        .collect()
+}
+
+fn build_readings() -> HashMap<char, Vec<String>> {
+    JP_READINGS
+        .iter()
+        .map(|(chars, spellings)| {
+            let ch = chars.chars().next().expect("non-empty key");
+            let list: Vec<String> = spellings.split(',').map(String::from).collect();
+            (ch, list)
+        })
+        .collect()
+}
+
+/// Reverse table for Chinese labeler predictions: char -> spellings.
+pub static CN_REVERSE: LazyLock<HashMap<char, Vec<String>>> = LazyLock::new(|| {
+    let mut out: HashMap<char, Vec<String>> = HashMap::new();
+    let d = data();
+    let mut add = |key: &str, set: &CharSet| {
+        if let CharSet::Sorted(cps) = set {
+            for &cp in cps {
+                if let Some(c) = char::from_u32(cp) {
+                    out.entry(c).or_default().push(key.to_string());
+                }
+            }
+        }
+    };
+    for (k, set) in &d.cn_char1 {
+        add(k, set);
+    }
+    for (k, set) in &d.cn_char2 {
+        add(k, set);
+    }
+    out
+});
+
+static DATA: LazyLock<Data> = LazyLock::new(|| Data {
+    jp_readings_map: build_readings(),
+    cn_char1: build_map(CN_CHAR1),
+    cn_char2: build_map(CN_CHAR2),
+    jp_p1: build_map(JP_P1),
+    jp_p2: build_map(JP_P2),
+    jp_p3_class: build_map(JP_P3_CLASS),
+    jp_p3_lit: build_lit(JP_P3_LIT),
+    ko: build_ko(),
+});
+
+pub fn data() -> &'static Data {
+    &DATA
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generated_cn_tables_load() {
+        let d = data();
+        assert!(d.cn_char1.contains_key("a"));
+        assert!(d.cn_char1["a"].contains('爱'));
+        assert!(d.cn_char1["r"].contains('日'), "日 belongs to the r class");
+        assert!(d.cn_char2.contains_key("ni"));
+        assert!(d.cn_char2["ni"].contains('你'));
+    }
+
+    #[test]
+    fn generated_jp_tables_load() {
+        let d = data();
+        assert!(d.jp_p2["ni"].contains('日'));
+        assert!(d.jp_p2["ni"].contains('に'));
+        assert!(d.jp_p3_class["tsu"].contains('つ'));
+        assert!(d.jp_p3_lit["sha"].contains(&"しゃ"));
+        assert!(d.jp_p3_lit["sha"].contains(&"シャ"));
+    }
+
+    #[test]
+    fn korean_ranges_mirror_lua() {
+        let d = data();
+        assert!(d.ko["ki"].contains('김')); // prefix ki = 기..깋
+        assert!(!d.ko["ki"].contains('가'));
+        assert!(d.ko["dks"].contains('안'));
+        // prefix semantics: "dks" is also a prefix of 앉's key sequence dksw
+        assert!(d.ko["dks"].contains('앉'));
+        assert!(d.ko["dksw"].contains('앉'));
+        assert!(
+            !d.ko.contains_key("annyeo"),
+            "prefixes are capped at 4 letters"
+        );
+        assert!(d.ko["kim"].contains('김')); // MR variant
+    }
+
+    #[test]
+    fn korean_compound_finals_kept() {
+        // every compound final must have a non-None key sequence
+        for &t in &KO_COMPOUND_FINALS {
+            assert!(KO_T_KEYS[t].is_some(), "compound final t={t} lost its keys");
+        }
+    }
+}

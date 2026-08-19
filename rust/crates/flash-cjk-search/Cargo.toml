@@ -1,0 +1,12 @@
+[package]
+name = "flash-cjk-search"
+description = "stdin/stdout JSON matcher daemonless binary for flash-cjk.nvim"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+flash-cjk-core = { path = "../flash-cjk-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
