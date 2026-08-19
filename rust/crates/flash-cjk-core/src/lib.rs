@@ -13,8 +13,8 @@ pub mod parser;
 pub mod predict;
 
 pub use charset::CharSet;
-pub use matcher::{find_matches, find_matches_vim_semantics, Match};
-pub use parser::{compile, Alt, Langs};
+pub use matcher::{Match, find_matches, find_matches_vim_semantics};
+pub use parser::{Alt, Langs, compile};
 
 /// Convenience: compile + match in one call.
 pub fn matches(pattern: &str, lines: &[&str], langs: Langs) -> Vec<Match> {

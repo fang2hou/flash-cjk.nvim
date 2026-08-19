@@ -203,38 +203,38 @@ impl<'a> Compiler<'a> {
                     });
                     self.parse("", s, alpha_ok);
                 }
-                if self.langs.cn {
-                    if let Some(cs) = self.d.cn_char1.get(first.encode_utf8(&mut [0u8; 4])) {
-                        let mut s = segs.clone();
-                        s.push(Segment {
-                            input: first.to_string(),
-                            matcher: SegMatcher::One(cs.clone()),
-                            kind: SegKind::Cn,
-                        });
-                        self.parse("", s, false);
-                    }
+                if self.langs.cn
+                    && let Some(cs) = self.d.cn_char1.get(first.encode_utf8(&mut [0u8; 4]))
+                {
+                    let mut s = segs.clone();
+                    s.push(Segment {
+                        input: first.to_string(),
+                        matcher: SegMatcher::One(cs.clone()),
+                        kind: SegKind::Cn,
+                    });
+                    self.parse("", s, false);
                 }
-                if self.langs.jp {
-                    if let Some(cs) = self.d.jp_p1.get(f1.as_str()) {
-                        let mut s = segs.clone();
-                        s.push(Segment {
-                            input: first.to_string(),
-                            matcher: SegMatcher::One(cs.clone()),
-                            kind: SegKind::Jp,
-                        });
-                        self.parse("", s, false);
-                    }
+                if self.langs.jp
+                    && let Some(cs) = self.d.jp_p1.get(f1.as_str())
+                {
+                    let mut s = segs.clone();
+                    s.push(Segment {
+                        input: first.to_string(),
+                        matcher: SegMatcher::One(cs.clone()),
+                        kind: SegKind::Jp,
+                    });
+                    self.parse("", s, false);
                 }
-                if self.langs.ko {
-                    if let Some(cs) = self.d.ko.get(rest) {
-                        let mut s = segs;
-                        s.push(Segment {
-                            input: rest.to_string(),
-                            matcher: SegMatcher::One(cs.clone()),
-                            kind: SegKind::Ko,
-                        });
-                        self.parse("", s, false);
-                    }
+                if self.langs.ko
+                    && let Some(cs) = self.d.ko.get(rest)
+                {
+                    let mut s = segs;
+                    s.push(Segment {
+                        input: rest.to_string(),
+                        matcher: SegMatcher::One(cs.clone()),
+                        kind: SegKind::Ko,
+                    });
+                    self.parse("", s, false);
                 }
             } else if second.is_ascii_alphabetic() {
                 let f2 = first.to_string();
@@ -312,18 +312,19 @@ impl<'a> Compiler<'a> {
                             continue;
                         }
                         let seg = &rest[..len];
-                        if seg.is_ascii() && seg.chars().count() == len {
-                            if let Some(cs) = self.d.ko.get(seg) {
-                                let cs = cs.clone();
-                                let mut s = segs.clone();
-                                s.push(Segment {
-                                    input: seg.to_string(),
-                                    matcher: SegMatcher::One(cs),
-                                    kind: SegKind::Ko,
-                                });
-                                let tail = &rest[seg.len()..];
-                                self.parse(tail, s, false);
-                            }
+                        if seg.is_ascii()
+                            && seg.chars().count() == len
+                            && let Some(cs) = self.d.ko.get(seg)
+                        {
+                            let cs = cs.clone();
+                            let mut s = segs.clone();
+                            s.push(Segment {
+                                input: seg.to_string(),
+                                matcher: SegMatcher::One(cs),
+                                kind: SegKind::Ko,
+                            });
+                            let tail = &rest[seg.len()..];
+                            self.parse(tail, s, false);
                         }
                     }
                     if jp_vowel(first) && self.d.ko.contains_key(f3.as_str()) {

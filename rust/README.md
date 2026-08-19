@@ -13,17 +13,17 @@ against every branch, and the cost grows with pattern length
 (55-80 ms/keystroke for long patterns on a 60-line window). The Rust
 matcher compiles the same segmentations into per-alternative DP passes
 over the text: ~0.1-2.4 ms/keystroke for the same inputs, and longer
-patterns get *faster* (fewer matches), not slower.
+patterns get _faster_ (fewer matches), not slower.
 
 Measured end-to-end (60-line mixed CJK window, full flash `State`
 pipeline incl. spawning the binary per keystroke):
 
-| pattern | vim-regex | rust  | speedup |
-|---------|-----------|-------|---------|
-| `n`     | 16.4 ms   | 4.3 ms | 3.8x   |
-| `ni`    | 20.6 ms   | 2.4 ms | 8.7x   |
-| `nih`   | 80.7 ms   | 1.8 ms | 45x    |
-| `kim`   | 55.2 ms   | 0.7 ms | 76x    |
+| pattern | vim-regex | rust   | speedup |
+| ------- | --------- | ------ | ------- |
+| `n`     | 16.4 ms   | 4.3 ms | 3.8x    |
+| `ni`    | 20.6 ms   | 2.4 ms | 8.7x    |
+| `nih`   | 80.7 ms   | 1.8 ms | 45x     |
+| `kim`   | 55.2 ms   | 0.7 ms | 76x     |
 
 ## Build
 
@@ -73,7 +73,7 @@ nvim -l scripts/export_rs.lua
   meaningfully, and the simple formulation is exactly what the strict
   cross-validation can reason about.
 - **Persistent daemon instead of per-keystroke spawn**: measured
-  `vim.system` spawn + JSON + search on 60 lines at **0.44 ms** per
+  `vim.system` spawn, JSON, and search on 60 lines at **0.44 ms** per
   call (release build); a daemon would save ~0.35 ms/keystroke while
   adding process-lifecycle and async-bridging complexity. Rejected on
   measurement. Note: each spawned process rebuilds its tables from the
@@ -82,13 +82,13 @@ nvim -l scripts/export_rs.lua
 Steady-state keystroke profile (60-line window, 100 matches, warm
 state, after the labeler union-set optimization):
 
-| phase | ms |
-|---|---|
-| rust matcher (spawn + JSON + DP) | 0.6 |
-| labeler (skip + assignment) | 1.4 |
-| highlight | 0.3 |
-| flash state machinery | 0.8 |
-| **total** | **~3.1** |
+| phase                            | ms       |
+| -------------------------------- | -------- |
+| rust matcher (spawn + JSON + DP) | 0.6      |
+| labeler (skip + assignment)      | 1.4      |
+| highlight                        | 0.3      |
+| flash state machinery            | 0.8      |
+| **total**                        | **~3.1** |
 
 The remaining floor is flash's own per-match pipeline, which the
 vim-regex path pays identically. With multiple visible windows flash

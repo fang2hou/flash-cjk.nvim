@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.12"
+# dependencies = []
+# ///
 """Generate lua/flash-cjk/jp_data.lua from the Unicode Unihan database.
 
 Data sources (per kanji):

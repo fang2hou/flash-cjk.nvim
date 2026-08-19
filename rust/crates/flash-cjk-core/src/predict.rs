@@ -5,7 +5,7 @@
 //! start with the current clean pattern, and collect the letter that
 //! follows it.
 
-use crate::data::{data, CN_REVERSE};
+use crate::data::{CN_REVERSE, data};
 /// Korean syllable -> spellings (romaji variants + two-set keys),
 /// mirroring ko.lua `strs`.
 fn ko_spellings(ch: char) -> Vec<String> {

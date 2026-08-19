@@ -1,8 +1,8 @@
 //! Benchmarks mirroring the real workload: a ~60-line mixed CJK window
 //! re-matched on every keystroke as the pattern grows.
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use flash_cjk_core::{compile, find_matches, Langs};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use flash_cjk_core::{Langs, compile, find_matches};
 
 fn bench_lines() -> Vec<String> {
     (1..=60)

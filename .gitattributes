@@ -1,0 +1,7 @@
+* -linguist-detectable
+lua/** linguist-detectable
+rust/crates/** linguist-detectable
+tests/** linguist-detectable
+scripts/** linguist-detectable
+**/Cargo.lock linguist-generated
+rust/data/** linguist-generated

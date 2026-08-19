@@ -1,0 +1,60 @@
+[tools]
+rust = "stable"
+python = "3.12"
+uv = "latest"
+neovim = "latest"
+prek = "latest"
+cocogitto = "latest"
+taplo = "latest"
+oxfmt = "latest"
+
+[tasks.check]
+description = "fast validation: rustfmt + clippy + markdown/toml formatting"
+depends = ["fmt", "clippy", "fmt-md", "fmt-toml"]
+
+[tasks.fmt]
+hide = true
+dir = "rust"
+run = "cargo fmt --all --check"
+
+[tasks.clippy]
+hide = true
+dir = "rust"
+run = "cargo clippy --all-targets -- -D warnings"
+
+[tasks.fmt-md]
+hide = true
+run = "oxfmt --check $(git ls-files '*.md')"
+
+[tasks.fmt-toml]
+hide = true
+run = "taplo format --check $(git ls-files '*.toml')"
+
+[tasks.format]
+description = "format rust, markdown, and toml in place"
+run = """
+(cd rust && cargo fmt --all)
+oxfmt --write $(git ls-files '*.md')
+taplo format $(git ls-files '*.toml')
+"""
+
+[tasks.test]
+description = "rust unit tests + lua suites (runs check first)"
+depends = ["check"]
+run = """
+cargo test --manifest-path rust/Cargo.toml --quiet
+nvim --headless +"lua dofile('tests/run.lua')" +qa!
+nvim --headless -l tests/cross_validate_rust.lua
+"""
+
+[tasks.e2e]
+description = "LazyVim-style end-to-end repro incl. rust/vim parity (runs check first)"
+depends = ["check"]
+run = "tests/e2e/run.sh"
+
+[tasks.codegen]
+description = "regenerate jp readings from Unihan, then sync rust data from lua"
+run = """
+uv run scripts/gen_jp_data.py
+nvim -l scripts/export_rs.lua
+"""

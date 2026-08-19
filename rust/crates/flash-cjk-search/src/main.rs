@@ -9,7 +9,7 @@
 use std::io::{self, Read, Write};
 
 use anyhow::Context;
-use flash_cjk_core::{matches, Langs};
+use flash_cjk_core::{Langs, matches};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]

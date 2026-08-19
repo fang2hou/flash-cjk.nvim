@@ -3,10 +3,10 @@ resolver = "2"
 members = ["crates/flash-cjk-core", "crates/flash-cjk-search"]
 
 [workspace.package]
-edition = "2021"
+edition = "2024"
 version = "0.1.0"
 license = "MIT"
-rust-version = "1.80"
+rust-version = "1.97"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }

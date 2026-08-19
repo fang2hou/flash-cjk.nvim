@@ -1,0 +1,30 @@
+name: Validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Install toolchain (mise)
+        uses: jdx/mise-action@v4
+      - name: Check formatting and lint
+        run: mise run check
+      - name: Run test suites
+        run: mise run test
+      - name: Run end-to-end suite
+        run: mise run e2e

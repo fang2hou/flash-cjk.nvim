@@ -169,7 +169,7 @@ pub fn find_matches(lines: &[&str], alts: &[crate::parser::Alt]) -> Vec<Match> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::{compile, Alt, Langs, SegMatcher, Segment};
+    use crate::parser::{Alt, Langs, SegMatcher, Segment, compile};
 
     fn one_ascii(c: char) -> Segment {
         Segment {
@@ -330,7 +330,7 @@ mod tests {
 #[cfg(test)]
 mod fuzz {
     use super::*;
-    use crate::parser::{compile, Langs};
+    use crate::parser::{Langs, compile};
 
     /// xorshift64* deterministic PRNG
     struct Rng(u64);
