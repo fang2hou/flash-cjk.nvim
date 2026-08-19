@@ -218,7 +218,7 @@ impl<'a> Compiler<'a> {
                 let f2 = first.to_string();
                 let two: String = [first, second].iter().collect();
                 let three: String = [first, second, third].iter().collect();
-                // zhcn flypy (2 keys)
+                // zhcn xiaohe double-pinyin (2 keys)
                 if self.langs.zhcn && self.d.cn_char2.contains_key(two.as_str()) {
                     let cs = self.d.cn_char2[two.as_str()].clone();
                     let mut s = segs.clone();
@@ -446,7 +446,7 @@ mod tests {
         let has_pinyin = alts
             .iter()
             .any(|a| a.segments.len() == 1 && a.segments[0].input == "ni");
-        assert!(has_pinyin, "flypy ni segment present");
+        assert!(has_pinyin, "zhcn double-pinyin ni segment present");
         let has_alpha = alts
             .iter()
             .any(|a| a.segments.len() == 2 && a.segments.iter().all(|s| s.input.len() == 1));

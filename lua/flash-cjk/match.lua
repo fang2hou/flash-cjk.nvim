@@ -119,7 +119,7 @@ local function regex(segments, comma)
 end
 
 -- Splits the input into every plausible sequence of segments.
--- A segment is one of: a literal letter (alpha), a 2-key flypy code
+-- A segment is one of: a literal letter (alpha), a 2-key xiaohe double-pinyin code
 -- (pinyin), a single pinyin first letter (singlepin), a 1-3 letter
 -- romaji prefix (jp), a punctuation key (comma) or any other character.
 ---@param str string
