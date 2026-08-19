@@ -1,0 +1,102 @@
+{
+  "categories": {
+    "zh_ja_ko_en": {
+      "languages": [
+        "zh",
+        "jp",
+        "ko",
+        "en"
+      ],
+      "cases": 350,
+      "vim_ms": {
+        "p50": 2.371,
+        "p95": 79.545,
+        "mean": 15.691
+      },
+      "rust_ms": {
+        "p50": 9.406000000000001,
+        "p95": 20.7,
+        "mean": 10.887
+      },
+      "speedup_mean": 0.9379999999999999,
+      "mean_ratio": 1.441,
+      "p95_ratio": 3.843,
+      "vim_regex_failures": 1
+    },
+    "ja_ko": {
+      "languages": [
+        "jp",
+        "ko"
+      ],
+      "cases": 350,
+      "vim_ms": {
+        "p50": 2.474,
+        "p95": 95.30200000000001,
+        "mean": 24.231
+      },
+      "rust_ms": {
+        "p50": 9.532,
+        "p95": 19.677,
+        "mean": 11.103
+      },
+      "speedup_mean": 1.378,
+      "mean_ratio": 2.182,
+      "p95_ratio": 4.843,
+      "vim_regex_failures": 2
+    },
+    "zh_ja": {
+      "languages": [
+        "zh",
+        "jp"
+      ],
+      "cases": 350,
+      "vim_ms": {
+        "p50": 1.242,
+        "p95": 69.49299999999999,
+        "mean": 11.312
+      },
+      "rust_ms": {
+        "p50": 9.449999999999999,
+        "p95": 17.19,
+        "mean": 10.423
+      },
+      "speedup_mean": 0.732,
+      "mean_ratio": 1.085,
+      "p95_ratio": 4.043,
+      "vim_regex_failures": 1
+    }
+  },
+  "overall": {
+    "vim_regex_failures_note": "cases whose alternation exceeded vim's NFA capture-group limit (E872); the Rust path matched them all",
+    "cases": 1050,
+    "vim_ms": {
+      "p50": 1.819,
+      "p95": 81.869,
+      "mean": 17.071
+    },
+    "rust_ms": {
+      "p50": 9.465999999999999,
+      "p95": 19.412,
+      "mean": 10.804
+    },
+    "speedup_mean": 1.016,
+    "mean_ratio": 1.58,
+    "p95_ratio": 4.217,
+    "vim_regex_failures": 4
+  },
+  "meta": {
+    "neovim": "0.12.4",
+    "seed": 42,
+    "lines_per_case": "20-60",
+    "os": "Darwin 27.0.0 (arm64)",
+    "warmup_passes": 1,
+    "measured_passes": 3,
+    "statistic": "median of 3 passes, per case",
+    "cpu": "Apple M4 Pro",
+    "cases": 1050,
+    "binary_startup_ms": 8.615,
+    "date": "2026-08-19",
+    "note": "rust path includes the per-keystroke process spawn (vim.system + JSON), same as live usage",
+    "process_spawn_ms": 1.169
+  }
+}
