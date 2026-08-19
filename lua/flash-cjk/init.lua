@@ -429,6 +429,27 @@ local function get_char_patch()
 	end
 end
 
+-- Makes the lock state visible in flash's prompt: marker bytes would
+-- render as raw control characters (^A, ^B...); they are shown as
+-- readable [中]/[日]/[韩]/[英] tags instead. Only the display string
+-- is transformed -- the real pattern keeps its marker bytes.
+local function prompt_patch()
+	local ok, Prompt = pcall(require, "flash.prompt")
+	if not ok or type(Prompt.set) ~= "function" or Prompt._flash_cjk_patched then
+		return
+	end
+	Prompt._flash_cjk_patched = true
+	local orig = Prompt.set
+	Prompt.set = function(pattern, show)
+		local display = pattern
+			:gsub("\x01", " [中]")
+			:gsub("\x02", " [日]")
+			:gsub("\x04", " [韩]")
+			:gsub("\x05", " [英]")
+		return orig(display, show)
+	end
+end
+
 local function build_opts(opts)
 	local langs = resolve_langs(opts)
 	local keys = vim.tbl_deep_extend("force", {}, M.config.force_keys, opts.force_keys or {})
@@ -450,6 +471,7 @@ local function build_opts(opts)
 	-- C-c language lock is actually configured; everything else keeps
 	-- flash's original behavior.
 	get_char_patch()
+	prompt_patch()
 	-- Rust fast path: when the binary exists it replaces the vim-regex
 	-- searcher entirely; per-keystroke failures fall back to the default
 	-- searcher inside the bridge (see lua/flash-cjk/rust.lua)
