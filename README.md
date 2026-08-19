@@ -112,10 +112,12 @@ require("flash-cjk").setup({
         en = {enabled = true, force_key = "<C-e>"},  -- no scheme concept
     },
     alpha_mixing = true,
+    priority = { "ja", "zhcn" },  -- label order: ja matches first
 })
 
 require("flash-cjk").jump({ "ja", "ko", "en" })  -- this jump: no Chinese
 require("flash-cjk").jump(nil, { languages = { ja = { force_key = "<C-d>" } } })
+require("flash-cjk").jump(nil, { priority = { "ko" } })  -- this jump: label ko matches first
 ```
 
 `scheme` accepts `"xiaohe"` for `zhcn` and `"roma"` for `ja`/`ko` (the only
@@ -126,6 +128,12 @@ current value. `jump()` without an array uses the setup-enabled set; a given
 array fully decides that jump's set (schemes fall back to each language's
 default) and overrides the setup switches. The second argument passes flash
 options through, with `languages` overriding fields for that jump only.
+
+`priority` orders label assignment by language: matches reachable through
+earlier-listed languages receive the earliest labels (a match several
+languages can interpret belongs to its highest-priority one), so targets in
+your primary language need the fewest label keys. Match sets and jump
+semantics are unchanged; unset keeps plain position order.
 
 Single-language users keep one language enabled. Notes:
 

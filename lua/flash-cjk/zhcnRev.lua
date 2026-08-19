@@ -47,12 +47,19 @@ local function utf8_sub(str, startChar, numChars) --截取中文字符串
 end
 
 local function init_py_table()
-	for k, v in pairs(zhcn.char2patterns) do
-		local start_char, end_char = v:find("%[(.-)%]")
-		v = v:sub(start_char + 1, end_char - 1)
-		for i = 1, utf8_len(v) do
-			local char = utf8_sub(v, i, 1)
-			py_table:insert(char, k)
+	-- both spellings a character is reachable through: the xiaohe
+	-- initial (char1patterns, single-letter input) and the full
+	-- syllable (char2patterns) -- mirroring the matcher's alternatives
+	-- and the Rust CN_REVERSE table, so predictions and language
+	-- attribution agree across paths
+	for _, table_name in ipairs({ "char1patterns", "char2patterns" }) do
+		for k, v in pairs(zhcn[table_name]) do
+			local start_char, end_char = v:find("%[(.-)%]")
+			v = v:sub(start_char + 1, end_char - 1)
+			for i = 1, utf8_len(v) do
+				local char = utf8_sub(v, i, 1)
+				py_table:insert(char, k)
+			end
 		end
 	end
 	for k, v in pairs(zhcn.comma) do

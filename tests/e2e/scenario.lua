@@ -56,14 +56,14 @@ local function jump_capture(opts)
   opts = opts or {}
   opts.labeler = function(_, state)
     last_state = state
-    require("flash-cjk.labeler").new(state, fc.resolve_langs(nil), keys):update()
+    require("flash-cjk.labeler").new(state, fc.resolve_langs(nil, opts), keys, cfg.effective_priority(opts)):update()
   end
   return fc.jump(nil, opts)
 end
 
-local function run(prefed)
+local function run(prefed, opts)
   vim.api.nvim_input(prefed)
-  local ok_run, err = pcall(jump_capture, {})
+  local ok_run, err = pcall(jump_capture, opts or {})
   return ok_run, err
 end
 
@@ -124,6 +124,41 @@ if last_state and last_state.results then
 else
   ok(false, "jump ti+C-j: no state captured")
 end
+
+-- language priority through the real loop: the per-jump priority
+-- override decides which match gets the first label -- ち (ja) or 梯
+-- (zhcn); without one, position order labels the leftmost first.
+-- <cr> accepts the default target (jump semantics are untouched by
+-- priority); labels stay on the captured state for assertion. The
+-- cursor resets between runs so every run starts from the same spot.
+-- (<esc> would work once, but flash re-queues the abort escape into
+-- the typeahead, silently killing the next prefed jump.)
+local function label_of_last(char)
+  for _, m in ipairs(last_state.results or {}) do
+    if char_at(m) == char then
+      return m.label
+    end
+  end
+  return nil
+end
+
+last_state = nil
+ok_run, err = run("ti<cr>", { priority = { "ja" } })
+vim.api.nvim_win_set_cursor(0, { 1, 0 })
+ok(ok_run and err == nil, "priority ja: loop completed without error" .. (err and (": " .. tostring(err)) or ""))
+ok(label_of_last("ち") == "a", ("priority ja: first label on ち (got %s)"):format(tostring(label_of_last("ち"))))
+
+last_state = nil
+ok_run, err = run("ti<cr>", { priority = { "zhcn" } })
+vim.api.nvim_win_set_cursor(0, { 1, 0 })
+ok(ok_run and err == nil, "priority zhcn: loop completed without error" .. (err and (": " .. tostring(err)) or ""))
+ok(label_of_last("梯") == "a", ("priority zhcn: first label on 梯 (got %s)"):format(tostring(label_of_last("梯"))))
+
+last_state = nil
+ok_run, err = run("ti<cr>", {})
+vim.api.nvim_win_set_cursor(0, { 1, 0 })
+ok(ok_run and err == nil, "no priority: loop completed without error" .. (err and (": " .. tostring(err)) or ""))
+ok(label_of_last("ち") == "a", ("no priority: position order labels ち first (got %s)"):format(tostring(label_of_last("ち"))))
 
 -- scrolled window: the exact user-reported regression -- jump must find
 -- matches when the visible slice starts below line 1

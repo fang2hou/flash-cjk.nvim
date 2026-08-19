@@ -529,6 +529,99 @@ do
 	fc.config = saved
 end
 
+-- ---------------------------------------------------------------------------
+-- language priority: label-assignment order only
+
+do
+	local State = require("flash.state")
+	local labeler_mod = require("flash-cjk.labeler")
+	local all = { zhcn = true, ja = true, ko = true, en = true }
+	local last_labeler
+
+	local function priority_state(priority, pattern, buffer)
+		vim.api.nvim_buf_set_lines(0, 0, -1, false, buffer)
+		vim.api.nvim_win_set_cursor(0, { 1, 0 })
+		return State.new({
+			pattern = pattern,
+			labels = "asdfghjklqwertyuiopzxcvbnm",
+			search = { mode = fc.make_mix_mode(all) },
+			labeler = function(_, s)
+				last_labeler = labeler_mod.new(s, all, nil, priority)
+				last_labeler:update()
+			end,
+		})
+	end
+
+	local function label_at(state, byte_col)
+		for _, m in ipairs(state.results) do
+			if m.pos[2] == byte_col then
+				return m.label
+			end
+		end
+	end
+
+	-- position of a match's label in the pool: smaller = assigned
+	-- earlier (the skip-set can remove early letters, so label bytes
+	-- do not order)
+	local function pool_pos(state, byte_col)
+		local want = label_at(state, byte_col)
+		for i, l in ipairs(last_labeler.labels) do
+			if l == want then
+				return i
+			end
+		end
+	end
+
+	local TI_BUF, TI_TI, TI_CN = { "x 梯 ち" }, 6, 2 -- byte cols of ち and 梯
+	local st = priority_state({ "ja" }, "ti", TI_BUF)
+	ok(pool_pos(st, TI_TI) < pool_pos(st, TI_CN), "priority ja: first label goes to the ja match")
+	st = priority_state({ "zhcn" }, "ti", TI_BUF)
+	ok(pool_pos(st, TI_CN) < pool_pos(st, TI_TI), "priority zhcn: first label goes to the zhcn match")
+	st = priority_state(nil, "ti", TI_BUF)
+	ok(pool_pos(st, TI_CN) < pool_pos(st, TI_TI), "no priority: position order (leftmost labeled first)")
+
+	-- multi-interpretation attribution: 梯 extends "t" through BOTH
+	-- xiaohe (ti) and Japanese readings (tai/tei), so a ja priority
+	-- keeps it top-ranked alongside ち, while zhcn promotes it over the
+	-- leftmost ち (the reverse buffer makes the flip observable)
+	local T_BUF, T_TI, T_CN = { "x ち 梯" }, 2, 6
+	st = priority_state({ "zhcn" }, "t", T_BUF)
+	ok(pool_pos(st, T_CN) < pool_pos(st, T_TI), "multi-interpretation: zhcn priority promotes 梯 (zhcn+ja) over ち")
+	st = priority_state({ "ja" }, "t", T_BUF)
+	ok(pool_pos(st, T_TI) < pool_pos(st, T_CN), "multi-interpretation: ja priority keeps position order (梯 counts as ja too)")
+	st = priority_state(nil, "t", T_BUF)
+	ok(pool_pos(st, T_TI) < pool_pos(st, T_CN), "multi-interpretation: no priority keeps position order")
+
+	-- attribution of one text: engines whose spellings extend the
+	-- prefix; literal ASCII spans belong to en
+	local ml = labeler_mod.match_langs("梯x", "t", all)
+	local has_zh, has_ja = false, false
+	for _, lang in ipairs(ml) do
+		has_zh = has_zh or lang == "zhcn"
+		has_ja = has_ja or lang == "ja"
+	end
+	ok(has_zh and has_ja, "match_langs: 梯 attributed to zhcn and ja for prefix t")
+	ml = labeler_mod.match_langs("ちx", "ti", all)
+	ok(#ml == 1 and ml[1] == "ja", "match_langs: ち attributed to ja only")
+	ml = labeler_mod.match_langs("timex", "ti", all)
+	ok(#ml == 1 and ml[1] == "en", "match_langs: literal ASCII span attributed to en")
+	ml = labeler_mod.match_langs("timex", "ti", { zhcn = true, ja = true, ko = true, en = false })
+	ok(#ml == 0, "match_langs: en attribution follows the enabled flags")
+
+	-- config validation: storage, dedupe, errors, per-jump override
+	local saved = vim.deepcopy(fc.config)
+	fc.setup({ priority = { "ja", "zhcn" } })
+	ok(vim.inspect(fc.config.priority) == vim.inspect({ "ja", "zhcn" }), "setup: priority stored in order")
+	fc.setup({ priority = { "ja", "ja", "ko" } })
+	ok(vim.inspect(fc.config.priority) == vim.inspect({ "ja", "ko" }), "setup: priority duplicates dropped")
+	ok(pcall(fc.setup, { priority = { "xx" } }) == false, "setup: unknown priority code errors")
+	ok(pcall(fc.setup, { priority = "ja" }) == false, "setup: non-array priority errors")
+	ok(vim.inspect(cfg.effective_priority({ priority = { "ko" } })) == vim.inspect({ "ko" }), "effective_priority: per-jump override wins")
+	ok(vim.inspect(cfg.effective_priority(nil)) == vim.inspect({ "ja", "ko" }), "effective_priority: falls back to the setup value")
+	fc.config = saved
+	ok(fc.config.priority == nil, "config restore: priority back to unset")
+end
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then
 	error("test failures")

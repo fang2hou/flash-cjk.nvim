@@ -146,6 +146,25 @@ local function rand_pattern()
 	return p
 end
 
+-- Lua attribution of one rust-reported match (line/col/len are the
+-- binary's: 0-based line, byte col, byte length), mirroring the
+-- predictor's text window: the match plus the following character
+local function vim_attr_for(p, line, col, len)
+	local char_size = require("flash-cjk.util").char_size
+	local match_end = col + len -- 1-based inclusive end byte
+	local text = string.sub(line, col + 1, match_end + char_size(line, match_end + 1))
+	return require("flash-cjk.labeler").match_langs(text, (fc.parse_forced(p)), langs)
+end
+
+local function attr_key(t)
+	local copy = {}
+	for i, v in ipairs(t) do
+		copy[i] = v
+	end
+	table.sort(copy)
+	return table.concat(copy, ",")
+end
+
 local function vim_spans_for(p, ls)
 	local regex = fc.mix_mode(p)
 	local spans = {}
@@ -166,9 +185,12 @@ local function vim_spans_for(p, ls)
 	return spans
 end
 
-local function rust_spans_for(p, ls)
+local function rust_result_for(p, ls)
 	local resp = rust.search(p, ls, langs)
-	local found = (resp and resp.matches) or {}
+	return (resp and resp.matches) or {}, resp
+end
+
+local function rust_spans_of(found)
 	local spans = {}
 	for _, m in ipairs(found) do
 		spans[#spans + 1] = string.format("%d:%d+%d", m[1] + 1, m[2], m[4])
@@ -177,10 +199,12 @@ local function rust_spans_for(p, ls)
 end
 
 local fuzz_fails = 0
+local attr_checked = 0
 for round = 1, 300 do
 	local ls, p = { rand_line(), rand_line(), rand_line() }, rand_pattern()
 	local vs = vim_spans_for(p, ls)
-	local rs = rust_spans_for(p, ls)
+	local found, resp = rust_result_for(p, ls)
+	local rs = rust_spans_of(found)
 	if #vs ~= #rs then
 		fuzz_fails = fuzz_fails + 1
 		print(string.format("FUZZ COUNT round=%d pattern=%q vim=%d rust=%d", round, p, #vs, #rs))
@@ -192,9 +216,30 @@ for round = 1, 300 do
 				break
 			end
 		end
+		-- attribution parity: spans already agree item by item, so the
+		-- rust prediction tags and the Lua spelling attribution must
+		-- match on every match
+		local tags = (resp and resp.pred_langs) or {}
+		for i, m in ipairs(found) do
+			local va = vim_attr_for(p, ls[m[1] + 1], m[2], m[4])
+			if attr_key(va) ~= attr_key(tags[i] or {}) then
+				fuzz_fails = fuzz_fails + 1
+				print(
+					string.format(
+						"ATTR round=%d pattern=%q #%d vim=%s rust=%s",
+						round,
+						p,
+						i,
+						attr_key(va),
+						attr_key(tags[i] or {})
+					)
+				)
+			end
+			attr_checked = attr_checked + 1
+		end
 	end
 end
 if fuzz_fails > 0 then
 	error(fuzz_fails .. " fuzz failures")
 end
-print("FUZZ CROSS-VALIDATION PASSED (300 random rounds, strict equality)")
+print(string.format("FUZZ CROSS-VALIDATION PASSED (300 rounds, strict equality, %d attributions)", attr_checked))

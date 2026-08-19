@@ -112,10 +112,12 @@ require("flash-cjk").setup({
         en = {enabled = true, force_key = "<C-e>"},  -- 스킴 개념 없음
     },
     alpha_mixing = true,
+    priority = { "ja", "zhcn" },  -- 라벨 순서: 일본어 매칭 우선
 })
 
 require("flash-cjk").jump({ "ja", "ko", "en" })  -- 이번 점프에서는 중국어 제외
 require("flash-cjk").jump(nil, { languages = { ja = { force_key = "<C-d>" } } })
+require("flash-cjk").jump(nil, { priority = { "ko" } })  -- 이번 점프만: 한국어 매칭 우선
 ```
 
 `scheme`은 중국어 `"xiaohe"`, 일본어와 한국어 `"roma"`를 받습니다(현재 유일한
@@ -126,6 +128,11 @@ require("flash-cjk").jump(nil, { languages = { ja = { force_key = "<C-d>" } } })
 집합은 배열로만 완전히 결정됩니다(스킴은 각 언어의 기본값). setup 스위치보다
 우선하며, 두 번째 인자는 flash 옵션을 그대로 전달하고 그 안의 `languages`는
 그 점프에만 적용됩니다.
+
+`priority`는 언어별 라벨 할당 순서를 정합니다. 목록 앞쪽 언어로 도달 가능한
+매칭이 가장 빠른 라벨부터 받고(여러 언어로 해석 가능한 매칭은 가장 우선순위가
+높은 언어에 귀속됩니다), 주 언어 대상이 더 적은 라벨 키로 이동할 수 있습니다.
+매칭 집합과 점프 동작은 변하지 않으며, 미설정 시 위치 순서를 유지합니다.
 
 한 언어만 사용한다면 해당 언어 하나만 켜 두면 충분합니다. 참고 사항:
 

@@ -6,12 +6,23 @@ M.__index = M
 ---@param state Flash.State
 ---@param langs table<string, boolean>? language flags, default all enabled
 ---@param force_keys table? per-jump force_keys override
-function M.new(state, langs, force_keys)
+---@param priority string[]? language codes in label-assignment priority order
+function M.new(state, langs, force_keys, priority)
 	local self
 	self = setmetatable({}, M)
 	self.state = state
 	self.langs = langs or { zhcn = true, ja = true, ko = true, en = true }
 	self.force_keys = force_keys
+	if priority and #priority > 0 then
+		-- ranks: listed languages get their list position, everything
+		-- else ties on the trailing rank (filter()'s order stands among
+		-- them); an empty list ranks nothing and stays unset
+		self.lang_ranks = {}
+		for i, lang in ipairs(priority) do
+			self.lang_ranks[lang] = i
+		end
+		self.default_rank = #priority + 1
+	end
 	self.used = {}
 	self:reset()
 	return self
@@ -25,6 +36,9 @@ function M:update()
 	end
 
 	local matches = self:filter()
+	if self.lang_ranks then
+		matches = self:sort_by_priority(matches)
+	end
 
 	for _, match in ipairs(matches) do
 		self:label(match, true)
@@ -56,6 +70,128 @@ function M:match_strs(line, start_col, end_col, langs)
 		vim.list_extend(strs, require("flash-cjk.ko").strs(text))
 	end
 	return strs
+end
+
+local function ascii_alnum(byte)
+	return (byte >= 48 and byte <= 57) or (byte >= 65 and byte <= 90) or (byte >= 97 and byte <= 122)
+end
+
+-- Languages the current pattern could have reached `text` through:
+-- each enabled engine that produces a spelling of `text` (the matched
+-- text plus the character right after it, as in match_strs) extending
+-- `prefix`; literal ASCII spans belong to "en". Mirrors the Rust
+-- matcher's pred_langs tags.
+---@param text string matched text plus the following character
+---@param prefix string clean pattern (lock markers stripped)
+---@param langs table<string, boolean> enabled language flags
+---@return string[] langs attributed language codes
+function M.match_langs(text, prefix, langs)
+	local out = {}
+	local first = string.byte(text)
+	if first ~= nil and first < 128 then
+		-- letters and digits only: the literal-matching domain. Engines
+		-- pass ASCII through unchanged, so their spellings carry no
+		-- language information for such spans.
+		if langs.en and ascii_alnum(first) then
+			out[1] = "en"
+		end
+		return out
+	end
+	local function extends(strs)
+		for _, s in ipairs(strs) do
+			if string.sub(s, 1, #prefix) == prefix then
+				return true
+			end
+		end
+		return false
+	end
+	if langs.zhcn and extends(zhcnRev.pinyin(text)) then
+		out[#out + 1] = "zhcn"
+	end
+	if langs.ja and extends(require("flash-cjk.ja").romaji_strs(text)) then
+		out[#out + 1] = "ja"
+	end
+	if langs.ko and extends(require("flash-cjk.ko").strs(text)) then
+		out[#out + 1] = "ko"
+	end
+	return out
+end
+
+-- One match's language attribution: the cached Rust prediction tags
+-- when the native path produced this match, otherwise the Lua spelling
+-- expansion (mirrors skip()'s prediction/spelling split).
+---@param m Flash.Match
+---@param prefix string clean pattern
+---@param line_cache table<string, string> win/line text cache
+---@return string[]? langs nil when the match text is unavailable
+function M:attribution(m, prefix, line_cache)
+	local rust = package.loaded["flash-cjk.rust"]
+	if rust and rust.available() then
+		local preds = rust.predictions[m.win]
+		local pred = preds and preds[string.format("%d:%d:%d", m.pos[1], m.pos[2], m.end_pos[2])]
+		if pred then
+			return pred.langs
+		end
+	end
+	if m.pos[1] ~= m.end_pos[1] then
+		return nil -- multi-line matches never reach the prediction path
+	end
+	local key = m.win .. ":" .. m.pos[1]
+	local line = line_cache[key]
+	if line == nil then
+		local lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(m.win), m.pos[1] - 1, m.pos[1], false)
+		line = lines[1] or false
+		line_cache[key] = line
+	end
+	if not line then
+		return nil
+	end
+	-- the character right after the match is included, as the Rust
+	-- predictor does (end_pos points at the last character's first
+	-- byte, so the match's end byte needs the character size)
+	local match_end = m.end_pos[2] + char_size(line, m.end_pos[2] + 1)
+	local text = string.sub(line, m.pos[2] + 1, match_end + char_size(line, match_end + 1))
+	return M.match_langs(text, prefix, self.langs)
+end
+
+-- Stable label-issuance order under the configured priority: matches
+-- whose attribution includes a higher-priority language receive their
+-- labels first; equal ranks keep filter()'s (win, position) order.
+-- A language lock suspends the ordering: a locked jump matches
+-- through exactly one language, so every rank is equal.
+---@param matches Flash.Match[] filter() output
+---@return Flash.Match[] matches ordered for label issuance
+function M:sort_by_priority(matches)
+	local clean, forced = require("flash-cjk.match").parse_forced(self.state.pattern.pattern, self.force_keys)
+	if forced then
+		return matches
+	end
+	local line_cache = {}
+	local decorated = {}
+	for i, m in ipairs(matches) do
+		local rank = self.default_rank
+		local langs = self:attribution(m, clean, line_cache)
+		if langs then
+			for _, lang in ipairs(langs) do
+				local r = self.lang_ranks[lang]
+				if r and r < rank then
+					rank = r
+				end
+			end
+		end
+		decorated[i] = { rank, i, m }
+	end
+	table.sort(decorated, function(a, b)
+		if a[1] ~= b[1] then
+			return a[1] < b[1]
+		end
+		return a[2] < b[2]
+	end)
+	local out = {}
+	for i, d in ipairs(decorated) do
+		out[i] = d[3]
+	end
+	return out
 end
 
 -- Returns valid labels for the current search pattern in this window.
