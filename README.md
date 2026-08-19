@@ -157,10 +157,10 @@ Single-language users keep one language enabled. Notes:
 ## Rust acceleration (optional)
 
 An optional native matcher builds once and turns on automatically: on the
-benchmark below it cuts the mean per-keystroke cost by 1.6× and the p95 tail
-by 4.1×, and it keeps working on patterns whose regex alternation no longer
-compiles in Vim (E872). The `build =` line in the lazy spec above handles it;
-manual build:
+benchmark below it flattens the worst case — the p95 tail drops 2.3× overall
+and up to 10× on Japanese/Chinese + English mixes — and it keeps working on
+patterns whose regex alternation no longer compiles in Vim (E872). The
+`build =` line in the lazy spec above handles it; manual build:
 
 ```sh
 cd rust && cargo build --release
@@ -176,43 +176,83 @@ by a strict item-by-item cross-validation suite. Details and measurements:
 <p align="center">
   <img
     src="assets/benchmark.svg"
-    alt="Benchmark: per-keystroke cost of the vim-regex path vs the native Rust matcher across three mixed-CJK window categories"
+    alt="Benchmark: per-keystroke cost of the vim-regex path vs the native Rust matcher across the full 15-combination language matrix"
     width="720"
   />
 </p>
 
-Measured on the live per-keystroke paths: 1,050 generated mixed-CJK windows
-(20–60 lines each), characters sampled from the plugin's own data tables,
-patterns of 1–6 plausible keystrokes, deterministic seed.
+Measured on the live per-keystroke paths across the full language-combination
+matrix: every single, pair, triple, and the quad drawn from the four language
+codes — `zhcn` (Chinese), `ja` (Japanese), `ko` (Korean), `en` (English) —
+15 combinations × 70 windows = 1,050 generated windows of 20–60 lines. Each
+row enables only its own languages, samples window text from those
+languages, and types 1–6 plausible keystrokes for exactly those languages
+(the `en`-only row is pure ASCII words); the seed is deterministic.
 
-| Window mix                            | vim-regex mean |   Rust mean |  Speedup | vim-regex p95 |    Rust p95 |
-| ------------------------------------- | -------------: | ----------: | -------: | ------------: | ----------: |
-| Chinese + Japanese                    |        11.3 ms |     10.4 ms |     1.1× |       69.5 ms |     17.2 ms |
-| Japanese + Korean                     |        24.2 ms |     11.1 ms |     2.2× |       95.3 ms |     19.7 ms |
-| Chinese + Japanese + Korean + English |        15.7 ms |     10.9 ms |     1.4× |       79.5 ms |     20.7 ms |
-| **Overall**                           |    **17.1 ms** | **10.8 ms** | **1.6×** |   **81.9 ms** | **19.4 ms** |
+Singles — one language enabled:
+
+| Window mix | vim-regex mean | Rust mean | Ratio | vim-regex p95 | Rust p95 |
+| ---------- | -------------: | --------: | ----: | ------------: | -------: |
+| `ja`       |        0.85 ms |   8.57 ms | 0.10× |       2.74 ms |  9.43 ms |
+| `zhcn`     |        0.22 ms |   8.89 ms | 0.03× |       0.51 ms |  9.36 ms |
+| `en`       |        0.11 ms |   8.44 ms | 0.01× |       0.18 ms |  9.06 ms |
+| `ko`       |        0.11 ms |   8.28 ms | 0.01× |       0.29 ms |  8.54 ms |
+
+Pairs — two languages enabled:
+
+| Window mix    | vim-regex mean | Rust mean | Ratio | vim-regex p95 | Rust p95 |
+| ------------- | -------------: | --------: | ----: | ------------: | -------: |
+| `ja` + `en`   |        29.6 ms |   9.82 ms |  3.0× |      138.3 ms |  14.2 ms |
+| `ko` + `en`   |        4.96 ms |  10.64 ms | 0.47× |       36.4 ms |  24.5 ms |
+| `zhcn` + `en` |        4.46 ms |   9.80 ms | 0.46× |       41.5 ms |  20.4 ms |
+| `ja` + `ko`   |        1.35 ms |   8.48 ms | 0.16× |       4.19 ms |  8.87 ms |
+| `zhcn` + `ja` |        1.03 ms |   8.85 ms | 0.12× |       4.70 ms |  9.34 ms |
+| `zhcn` + `ko` |        0.31 ms |   8.98 ms | 0.03× |       0.65 ms |  9.71 ms |
+
+Triples — three languages enabled:
+
+| Window mix           | vim-regex mean | Rust mean | Ratio | vim-regex p95 | Rust p95 |
+| -------------------- | -------------: | --------: | ----: | ------------: | -------: |
+| `zhcn` + `ja` + `en` |        28.9 ms |  11.17 ms |  2.6× |      245.3 ms |  24.6 ms |
+| `ja` + `ko` + `en`   |        20.1 ms |  10.64 ms |  1.9× |      129.7 ms |  24.9 ms |
+| `zhcn` + `ja` + `ko` |        8.48 ms |   9.36 ms | 0.91× |       46.8 ms |  11.2 ms |
+| `zhcn` + `ko` + `en` |        5.69 ms |  10.69 ms | 0.53× |       32.6 ms |  19.5 ms |
+
+All four languages enabled:
+
+| Window mix                  | vim-regex mean |   Rust mean |     Ratio | vim-regex p95 |    Rust p95 |
+| --------------------------- | -------------: | ----------: | --------: | ------------: | ----------: |
+| `zhcn` + `ja` + `ko` + `en` |        16.8 ms |    11.44 ms |      1.5× |       95.1 ms |     23.9 ms |
+| **Overall (1,050 windows)** |    **8.19 ms** | **9.60 ms** | **0.85×** |   **29.8 ms** | **13.0 ms** |
 
 **Methodology.** Each case runs one warmup pass and reports the median of 3
-measured passes (`vim.uv.hrtime`). The vim-regex timing covers everything a
-live keystroke pays: pattern segmentation, alternation build, `vim.regex()`
-compile, and the match scan over every visible line. The Rust timing also
-covers everything: the `vim.system` process spawn and the JSON round-trip,
-exactly as the plugin invokes it. 4 of 1,050 patterns produced an alternation
-too large for Vim's NFA engine (E872) — they have no vim-regex timing, while
-the Rust matcher handled all of them.
+measured passes (`vim.uv.hrtime`); rows are sorted by vim-regex mean within
+each group. Ratio is vim-regex mean ÷ Rust mean — below 1× the pure-Lua path
+is faster. The vim-regex timing covers everything a live keystroke pays:
+pattern segmentation, alternation build, `vim.regex()` compile, and the
+match scan over every visible line. The Rust timing also covers everything:
+the `vim.system` process spawn and the JSON round-trip, exactly as the
+plugin invokes it. 0 of 1,050 patterns hit Vim's NFA capture-group limit
+(E872) in this run — per-mix language flags keep the alternations smaller —
+but the Rust matcher keeps working when one does.
 
-**How to read it.** Short prefixes (the first letter or two) are faster on the
-vim-regex path — the overall median is 1.8 ms vs 9.5 ms — because the native
-path pays a fixed floor on every keystroke: ~1.2 ms of process creation plus
-~8.6 ms of binary startup (data-table initialization). What the native path
-buys is the tail: long multi-interpretation patterns cost the vim-regex path
-60–95+ ms per keystroke (visibly laggy while typing), while the native path
-stays around ~20 ms and never hits the E872 compile wall.
+**How to read it.** The single-language rows are the per-language baselines:
+with one language enabled the alternation stays small and the vim-regex path
+answers in 0.1–0.9 ms, while the Rust path always pays its fixed floor
+(~1.1 ms process creation + ~8.4 ms binary startup) — the `en`-only row is
+almost a pure display of that spawn overhead. The trend to watch is the
+tail: adding `en` to `ja` or `zhcn` multiplies the segmentation
+interpretations, and the vim-regex cost climbs to ~29 ms mean with p95 at
+138–245 ms (visibly laggy while typing), while the Rust path stays in a
+flat 8–25 ms band on every mix. Overall the pure-Lua path wins the median
+(0.5 ms vs 8.9 ms — short prefixes never wake the binary) and the native
+path wins the worst case (p95 13.0 ms vs 29.8 ms, and 5–10× on the heaviest
+mixes).
 
 **System impact.** The native matcher spawns one short-lived process per
 keystroke per visible window (the benchmark above is single-window). Each
-invocation costs ~9–11 ms of wall time, almost all of it process creation
-(~1.2 ms) plus the binary's data-table startup (~8.6 ms); the DP matching
+invocation costs ~9–12 ms of wall time, almost all of it process creation
+(~1.1 ms) plus the binary's data-table startup (~8.4 ms); the DP matching
 itself adds sub-millisecond to a few ms, so the CPU/battery footprint is
 bounded by how fast you type — roughly one small process launch per key per
 window. The binary is ~1.8 MB, statically carries its data tables, has no runtime
@@ -222,7 +262,8 @@ breaker trips and every keystroke transparently falls back to the vim-regex
 path — identical matches, enforced by the cross-validation suite. Prefer the
 pure vim-regex path (i.e. simply don't build the binary) when process
 creation is expensive or restricted — sandboxes, hardened environments — or
-when you mostly type 1–2 letter prefixes, where it is the faster path anyway.
+when you work in one language at a time or mostly type 1–2 letter prefixes,
+where it is the faster path anyway.
 
 Reproduce on your own machine:
 

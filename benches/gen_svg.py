@@ -5,6 +5,11 @@ Usage (from the repo root, after `nvim -l benches/compare.lua`):
 
     uv run benches/gen_svg.py
 
+The chart shows the full language-combination matrix: horizontal bars
+grouped by mix size (singles / pairs / triples / all four), sorted by
+vim-regex mean within each group, with the vim-regex and Rust bars side
+by side per category and a summary panel for the overall figures.
+
 Downloads the Inter font (Google Fonts, SIL OFL 1.1) and embeds it as a
 base64 @font-face data URI so the SVG renders identically inside GitHub
 README <img> tags with no external references. If the download fails the
@@ -21,7 +26,6 @@ import os
 import re
 import sys
 import urllib.request
-from datetime import date
 from html import escape
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -36,13 +40,20 @@ BORDER = "#d1d9e0"
 TRACK = "#eff2f5"
 VIM_COLOR = "#bf8700"  # muted amber — the pure-Lua vim-regex path
 RUST_COLOR = "#1a7f37"  # green — the native Rust matcher
-CALLOUT_BG = "#dafbe1"
-CALLOUT_INK = "#116329"
+PANEL_BG = "#f6f8fa"
 
-CATEGORY_LABELS = {
-    "zh_ja": "Chinese + Japanese",
-    "ja_ko": "Japanese + Korean",
-    "zh_ja_ko_en": "Chinese + Japanese + Korean + English",
+LANG_NAMES = {
+    "zhcn": "Chinese",
+    "ja": "Japanese",
+    "ko": "Korean",
+    "en": "English",
+}
+
+GROUP_TITLES = {
+    1: "Singles — one language enabled",
+    2: "Pairs — two languages enabled",
+    3: "Triples — three languages enabled",
+    4: "All four languages enabled",
 }
 
 FONT_CSS_URL = (
@@ -120,7 +131,11 @@ def fmt_ms(x: float) -> str:
 
 
 def fmt_x(x: float) -> str:
-    return f"{x:.1f}\u00d7" if x < 10 else f"{x:.0f}\u00d7"
+    if x >= 10:
+        return f"{x:.0f}\u00d7"
+    if x < 1:
+        return f"{x:.2f}\u00d7"
+    return f"{x:.1f}\u00d7"
 
 
 def text(x: float, y: float, s: str, size: float, fill: str, weight: int = 400,
@@ -142,145 +157,181 @@ def rounded(x: float, y: float, w: float, h: float, r: float, fill: str,
     )
 
 
+def hline(x1: float, x2: float, y: float, color: str) -> str:
+    return (
+        f"<line x1='{x1:.1f}' y1='{y:.1f}' x2='{x2:.1f}' y2='{y:.1f}' "
+        f"stroke='{color}' stroke-width='1'/>"
+    )
+
+
+def cat_label(cat: dict) -> str:
+    return " + ".join(LANG_NAMES[c] for c in cat["languages"])
+
+
 def main() -> None:
     if not os.path.isfile(RESULTS):
         fail(f"{RESULTS} not found - run `nvim -l benches/compare.lua` first")
     with open(RESULTS, encoding="utf-8") as fh:
         results = json.load(fh)
 
-    cats = [
-        (key, results["categories"][key])
-        for key in ("zh_ja", "ja_ko", "zh_ja_ko_en")
-    ]
     overall = results["overall"]
     meta = results["meta"]
     total_cases = overall["cases"]
     failures = overall.get("vim_regex_failures", 0)
 
+    # group the categories by mix size; within a group sort by the
+    # vim-regex mean (heaviest first), with the id as a deterministic
+    # tie-break
+    by_size: dict[int, list[tuple[str, dict]]] = {}
+    for key, cat in results["categories"].items():
+        by_size.setdefault(len(cat["languages"]), []).append((key, cat))
+    groups = sorted(by_size.items())
+    for _, cats in groups:
+        cats.sort(key=lambda kc: (-kc[1]["vim_ms"]["mean"], kc[0]))
+
     font_css = embed_fonts()
 
-    W, H = 960, 620
+    W = 960
     LEFT, RIGHT = 40, W - 40
     BODY = RIGHT - LEFT
+    PANEL_W = 302
+    PANEL_X = RIGHT - PANEL_W
 
     parts = []
-    parts.append(
-        f"<svg xmlns='http://www.w3.org/2000/svg' width='{W}' height='{H}' "
-        "viewBox='0 0 %d %d' role='img' "
-        "aria-label='Benchmark: vim-regex path versus native Rust matcher, "
-        "per-keystroke cost'>" % (W, H)
-    )
-    parts.append(
-        f"<defs><style>{font_css}text{{font-family:'InterBench',Inter,"
-        "'Helvetica Neue',Arial,sans-serif;}}</style></defs>"
-    )
+
     # ---------------------------------------------------------------- header
-    parts.append(text(LEFT, 54, "flash-cjk.nvim — matcher performance",
-                      21, INK, 700))
+    # (kept short of PANEL_X so it never runs under the summary panel)
+    parts.append(text(LEFT, 48, "flash-cjk.nvim — matcher performance",
+                      20, INK, 700))
     parts.append(
-        text(LEFT, 76,
+        text(LEFT, 70,
              "Per-keystroke search cost: vim-regex path vs native Rust "
-             "matcher", 12.5, MUTED)
+             "matcher", 12, MUTED)
     )
     parts.append(
-        text(LEFT, 93,
-             f"{total_cases} generated mixed-CJK windows · characters "
-             "sampled from the plugin's data tables · lower is better",
-             11.5, MUTED)
+        text(LEFT, 87,
+             f"{total_cases} generated windows · 15 language combinations · "
+             "sampled from the plugin's data tables", 10.5, MUTED)
     )
 
-    # speedup callout: headline = ratio of means; secondary = tail ratio
-    cw, ch, cx, cy = 204, 84, RIGHT - 204, 26
-    parts.append(rounded(cx, cy, cw, ch, 10, CALLOUT_BG))
-    parts.append(text(cx + 16, cy + 34, fmt_x(overall["mean_ratio"]),
-                      28, CALLOUT_INK, 700))
-    parts.append(text(cx + 94, cy + 30, "lower mean cost", 11, CALLOUT_INK))
+    # --------------------------------------------------------- summary panel
+    panel_rows = [
+        ("mean", overall["vim_ms"]["mean"], overall["rust_ms"]["mean"],
+         overall["mean_ratio"]),
+        ("p50", overall["vim_ms"]["p50"], overall["rust_ms"]["p50"], None),
+        ("p95", overall["vim_ms"]["p95"], overall["rust_ms"]["p95"],
+         overall["p95_ratio"]),
+    ]
+    py = 26
+    panel_h = 24 + len(panel_rows) * 17 + 4 + 2 * 15 + 12
+    parts.append(rounded(PANEL_X, py, PANEL_W, panel_h, 10, PANEL_BG,
+                         stroke=BORDER))
+    ty = py + 24
+    parts.append(text(PANEL_X + 16, ty,
+                      f"Overall — {total_cases} cases", 12, INK, 700))
+    ty += 20
+    for name, vvim, vrust, ratio in panel_rows:
+        parts.append(text(PANEL_X + 16, ty, name, 10.5, MUTED))
+        parts.append(
+            text(PANEL_X + 52, ty,
+                 f"{fmt_ms(vvim)} \u2192 {fmt_ms(vrust)} ms", 10.5, INK, 700)
+        )
+        if ratio is not None:
+            parts.append(
+                text(PANEL_X + PANEL_W - 16, ty, fmt_x(ratio), 10.5,
+                     RUST_COLOR, 700, "end")
+            )
+        ty += 17
+    ty += 4
     parts.append(
-        text(cx + 16, cy + 56,
-             f"per keystroke: {fmt_ms(overall['vim_ms']['mean'])} to "
-             f"{fmt_ms(overall['rust_ms']['mean'])} ms",
-             9.5, CALLOUT_INK)
+        text(PANEL_X + 16, ty,
+             f"Rust floor: {fmt_ms(meta.get('process_spawn_ms', 0))} ms "
+             f"spawn + {fmt_ms(meta.get('binary_startup_ms', 0))} ms "
+             "startup", 9.5, MUTED)
     )
     parts.append(
-        text(cx + 16, cy + 72,
-             f"p95 tail: {fmt_ms(overall['vim_ms']['p95'])} to "
-             f"{fmt_ms(overall['rust_ms']['p95'])} ms "
-             f"({fmt_x(overall['p95_ratio'])})",
-             9.5, CALLOUT_INK)
+        text(PANEL_X + 16, ty + 15,
+             f"E872 regex-compile failures: {failures} of {total_cases} "
+             "(vim-regex only)", 9.5, MUTED)
     )
 
     # ---------------------------------------------------------------- legend
-    ly = 118
+    ly = py + panel_h + 22
     parts.append(rounded(LEFT, ly - 9, 12, 12, 3, VIM_COLOR))
-    parts.append(text(LEFT + 18, ly, "vim-regex (pure Lua path)", 11, MUTED))
+    parts.append(text(LEFT + 18, ly, "vim-regex (pure Lua path)", 10.5, MUTED))
     parts.append(rounded(LEFT + 172, ly - 9, 12, 12, 3, RUST_COLOR))
+    parts.append(text(LEFT + 190, ly, "Rust binary (process spawn included)",
+                      10.5, MUTED))
     parts.append(
-        text(LEFT + 190, ly, "Rust binary (process spawn included)", 11, MUTED)
+        text(RIGHT, ly,
+             "bars scaled per category · sorted by vim-regex mean · "
+             "\u00d7 = ratio of means", 9.5, FAINT, 400, "end")
     )
-    parts.append(
-        text(RIGHT, ly, "bar scale per category", 9.5, FAINT, 400, "end")
-    )
-    y = 152
-    for cat_id, cat in cats:
-        label = CATEGORY_LABELS[cat_id]
-        vim_ms = cat["vim_ms"]["mean"]
-        rust_ms = cat["rust_ms"]["mean"]
-        vmax = max(vim_ms, rust_ms)
-        # nice ceiling for tick labels
-        ceiling = vmax * 1.12
 
-        parts.append(text(LEFT, y, label, 13, INK, 700))
+    # ---------------------------------------------------------------- groups
+    # vertical rhythm: a category is 63px (label 16 + two 20px bar slots
+    # + 7 clearance); a group header adds 33px. All baselines keep at
+    # least a descender's clearance from the element above them.
+    y = ly + 26
+    for size, cats in groups:
+        y += 8
+        title = GROUP_TITLES.get(size, f"{size} languages")
+        parts.append(text(LEFT, y, title, 13, INK, 700))
         parts.append(
-            text(RIGHT, y, f"{cat['cases']} cases", 10.5, FAINT, 400, "end")
+            text(RIGHT, y,
+                 f"{len(cats)} categor{'ies' if len(cats) > 1 else 'y'} · "
+                 f"{sum(c['cases'] for _, c in cats)} cases", 10, FAINT,
+                 400, "end")
         )
-        y += 12
+        y += 9
+        parts.append(hline(LEFT, RIGHT, y, BORDER))
+        y += 16
 
-        for bar_i, (ms, color, name) in enumerate(
-            ((vim_ms, VIM_COLOR, "vim-regex"), (rust_ms, RUST_COLOR, "Rust"))
-        ):
-            y += 12
-            # grid ticks + track; numeric tick labels only on the first
-            # bar of the group (both bars share the same scale)
-            for frac in (0.25, 0.5, 0.75, 1.0):
-                gx = LEFT + BODY * frac
-                parts.append(
-                    f"<line x1='{gx:.1f}' y1='{y:.1f}' x2='{gx:.1f}' "
-                    f"y2='{y + 18:.1f}' stroke='{TRACK}' stroke-width='1'/>"
-                )
-                if bar_i == 0:
-                    parts.append(text(gx, y - 3, f"{fmt_ms(ceiling * frac)}",
-                                      8.5, FAINT, 400, "middle"))
-            parts.append(rounded(LEFT, y, BODY, 18, 9, TRACK))
-            bw = max(10.0, BODY * (ms / ceiling))
-            parts.append(rounded(LEFT, y, bw, 18, 9, color))
-            # value label inside the bar when it fits, outside otherwise
-            label_s = f"{name}  {fmt_ms(ms)} ms"
-            if bw > 150:
-                parts.append(text(LEFT + 14, y + 13, label_s, 11.5,
-                                  "#ffffff", 700))
-            else:
-                parts.append(text(LEFT + bw + 10, y + 13, label_s, 11.5,
-                                  INK, 700))
-            y += 26
-        y += 14
+        for _, cat in cats:
+            vim_ms = cat["vim_ms"]["mean"]
+            rust_ms = cat["rust_ms"]["mean"]
+            parts.append(text(LEFT, y, cat_label(cat), 12.5, INK, 700))
+            parts.append(
+                text(RIGHT, y, fmt_x(cat["mean_ratio"]), 11, MUTED, 700,
+                     "end")
+            )
+            y += 16
+            ceiling = max(vim_ms, rust_ms) * 1.06
+            for ms, color, name in (
+                (vim_ms, VIM_COLOR, "vim-regex"),
+                (rust_ms, RUST_COLOR, "Rust"),
+            ):
+                parts.append(rounded(LEFT, y, BODY, 14, 7, TRACK))
+                bw = max(6.0, BODY * ms / ceiling)
+                parts.append(rounded(LEFT, y, bw, 14, 7, color))
+                label_s = f"{name}  {fmt_ms(ms)} ms"
+                if bw > 150:
+                    parts.append(text(LEFT + 14, y + 11, label_s, 10.5,
+                                      "#ffffff", 700))
+                else:
+                    parts.append(text(LEFT + bw + 10, y + 11, label_s,
+                                      10.5, INK, 700))
+                y += 20
+            y += 7
 
     # ---------------------------------------------------------------- footnote
-    fy = H - 96
-    parts.append(
-        f"<line x1='{LEFT}' y1='{fy - 14}' x2='{RIGHT}' y2='{fy - 14}' "
-        f"stroke='{BORDER}' stroke-width='1'/>"
+    fy = y + 10
+    parts.append(hline(LEFT, RIGHT, fy, BORDER))
+    matrix = meta.get("matrix") or (
+        f"{len(results['categories'])} language combinations"
     )
     foot = [
-        f"Methodology: {total_cases} cases (20-60 lines each, characters "
-        "sampled from the plugin's own data tables), patterns of 1-6 "
-        "plausible keystrokes, deterministic seed.",
+        f"Methodology: {total_cases:,} cases — {matrix} · "
+        "20-60 lines per window,",
+        "characters sampled from the plugin's own data tables · patterns "
+        "of 1-6 plausible keystrokes · deterministic seed.",
         "Per case: warmup pass, then the median of 3 measured passes. "
         "Rust timings include the per-keystroke process spawn "
         "(vim.system + JSON round-trip), exactly as in live use.",
         f"Short prefixes favor the vim-regex path (overall p50 "
         f"{fmt_ms(overall['vim_ms']['p50'])} ms vs "
-        f"{fmt_ms(overall['rust_ms']['p50'])} ms); the native path trades "
-        "that for a flat worst case.",
+        f"{fmt_ms(overall['rust_ms']['p50'])} ms); richer mixes grow the "
+        "vim-regex tail while the Rust path stays flat.",
     ]
     if failures:
         foot.append(
@@ -294,11 +345,30 @@ def main() -> None:
         f"startup {fmt_ms(meta.get('binary_startup_ms', 0))} ms floor · "
         f"{meta['date']} · rerun: nvim -l benches/compare.lua"
     )
+    # footnote lines must fit the body width; ~0.52 em average advance
+    # for Inter regular at this size is a safe upper bound
+    for line in foot:
+        if len(line) * 9.8 * 0.52 > BODY:
+            fail(
+                f"footnote line exceeds the {BODY}px body width "
+                f"({line[:50]}...)"
+            )
+    H = int(fy + 18 + len(foot) * 15 + 12)
     for i, line in enumerate(foot):
-        parts.append(text(LEFT, fy + i * 15, line, 9.8, MUTED))
+        parts.append(text(LEFT, fy + 22 + i * 15, line, 9.8, MUTED))
 
-    parts.append("</svg>")
-    svg = "\n".join(parts)
+    svg_parts = [
+        f"<svg xmlns='http://www.w3.org/2000/svg' width='{W}' height='{H}' "
+        f"viewBox='0 0 {W} {H}' role='img' "
+        "aria-label='Benchmark: vim-regex path versus native Rust matcher "
+        "across the full 15-combination language matrix, per-keystroke "
+        "cost'>",
+        f"<defs><style>{font_css}text{{font-family:'InterBench',Inter,"
+        "'Helvetica Neue',Arial,sans-serif;}}</style></defs>",
+    ]
+    svg_parts.extend(parts)
+    svg_parts.append("</svg>")
+    svg = "\n".join(svg_parts)
 
     if len(svg.encode("utf-8")) > 300_000:
         fail(
@@ -311,7 +381,7 @@ def main() -> None:
         fh.write(svg)
     print(
         f"wrote {OUT} ({len(svg.encode('utf-8')) / 1024:.0f} KB, "
-        f"mean ratio {fmt_x(overall['mean_ratio'])}, "
+        f"{W}x{H}, mean ratio {fmt_x(overall['mean_ratio'])}, "
         f"p95 ratio {fmt_x(overall['p95_ratio'])})"
     )
 
