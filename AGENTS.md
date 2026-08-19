@@ -13,7 +13,7 @@ mise install                 # set up the toolchain (rust, neovim, python+uv, pr
 mise run check               # fast validation: rustfmt, clippy, markdown/toml formatting — run before every commit
 mise run test                # check + cargo test + lua suite + rust/vim parity cross-validation
 mise run e2e                 # check + LazyVim-style end-to-end repro (clones .deps on first run)
-mise run codegen             # regenerate jp_data.lua from Unihan + sync rust data from lua
+mise run codegen             # regenerate jaData.lua from Unihan + sync rust data from lua
 nvim --headless +"lua dofile('tests/run.lua')" +qa!                # lua suite alone
 nvim --headless -l tests/cross_validate_rust.lua                   # parity check alone
 cargo build --release --manifest-path rust/Cargo.toml              # native matcher binary
@@ -46,12 +46,12 @@ Project-specific overrides:
   `config.lua`/`match.lua`/`patches.lua`/`util.lua` (config state, matching
   domain, flash patches, shared helpers), `labeler.lua`, `rust.lua` (native
   matcher bridge with fallback circuit breaker),
-  `pinyin.lua`/`flypy.lua`/`jp.lua`/`ko.lua`/`jp_data.lua` (data and per-language logic)
+  `zhcnData.lua`/`jaData.lua`/`zhcnRev.lua`/`ja.lua`/`ko.lua` (data and per-language logic)
 - `rust/` — optional native matcher: workspace with `flash-cjk-core` (lib) and
   `flash-cjk-search` (stdin/stdout JSON binary); generated data lives in
   `rust/data/` and `flash-cjk-core/src/data/`
 - `tests/` — `run.lua` (behavior suite), `cross_validate_rust.lua` (strict rust↔vim-regex parity and fuzz), `e2e/` (LazyVim repro harness)
-- `scripts/` — data generators: `gen_jp_data.py` (Unihan → jp_data.lua), `export_rs.lua` (lua → rust data)
+- `scripts/` — data generators: `gen_jp_data.py` (Unihan → jaData.lua), `export_rs.lua` (lua → rust data)
 
 ## Boundaries
 
@@ -64,7 +64,7 @@ Always:
 
 Never:
 
-- Hand-edit `lua/flash-cjk/jp_data.lua` — regenerate with `uv run scripts/gen_jp_data.py`
+- Hand-edit `lua/flash-cjk/jaData.lua` — regenerate with `uv run scripts/gen_jp_data.py`
 - Hand-edit generated data (`rust/data/`, `rust/crates/flash-cjk-core/src/data/`) —
   regenerate with `nvim -l scripts/export_rs.lua`
 - Change language-lock marker bytes (`\x01/\x02/\x04/\x05`) without updating

@@ -1,12 +1,9 @@
--- LazyVim-style standalone repro for flash-cjk.nvim.
---
--- Modeled on the repro.lua pattern used for LazyVim bug reports: XDG
--- directories are redirected into an isolated root, lazy.nvim is
--- bootstrapped from a stable clone, and flash-cjk is loaded from the
--- local checkout through a real lazy.nvim spec (dir/build/keys/opts).
---
--- Manual use:   nvim -u tests/e2e/repro.lua
--- E2E run:      tests/e2e/run.sh
+-- LazyVim-style standalone repro for flash-cjk.nvim: isolated XDG
+-- root, bootstrapped lazy.nvim, and the local checkout loaded through
+-- a real spec (dir/build/keys/opts). Run:
+--   nvim -u tests/e2e/repro.lua
+-- E2E harness (drives the scenario in both matcher modes):
+--   tests/e2e/run.sh
 
 local uv = vim.uv or vim.loop
 
@@ -63,10 +60,13 @@ require("lazy").setup({
         { "s", mode = { "n", "x", "o" }, function() require("flash-cjk").jump() end, desc = "Flash CJK jump" },
       },
       opts = {
-        cn = true,
-        jp = true,
-        ko = true,
-        en = true,
+        languages = {
+          zhcn = { force_key = "<C-c>" }, -- default: enabled, scheme "xiaohe"
+          ja = { force_key = "<C-j>" }, -- default scheme: "roma"
+          ko = { force_key = "<C-k>" },
+          en = { force_key = "<C-e>" }, -- en has no scheme concept
+        },
+        alpha_mixing = true,
       },
     },
   },

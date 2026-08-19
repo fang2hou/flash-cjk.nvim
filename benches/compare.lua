@@ -18,8 +18,8 @@ package.path = "./lua/?.lua;./lua/?/init.lua;" .. package.path
 
 local rust = require("flash-cjk.rust")
 local fc = require("flash-cjk")
-local flypy = require("flash-cjk.flypy")
-local jp_data = require("flash-cjk.jp_data")
+local flypy = require("flash-cjk.zhcnData")
+local jp_data = require("flash-cjk.jaData")
 local ko = require("flash-cjk.ko")
 
 if not rust.available() then
@@ -129,7 +129,7 @@ local CATEGORIES = {
 local CASES_TOTAL = 1050
 local WARMUP_PASSES = 1
 local MEASURED_PASSES = 3
-local langs = { cn = true, jp = true, ko = true, en = true, alpha_mixing = true }
+local langs = { zhcn = true, ja = true, ko = true, en = true, alpha_mixing = true }
 
 -- One CJK token: 1-3 chars from one language (words run together in
 -- real CJK text, spaces only appear between words/segments).
@@ -313,7 +313,7 @@ do
 	local tiny = vim.json.encode({
 		pattern = "a",
 		lines = { "a" },
-		langs = { cn = true, jp = true, ko = true, en = true, alpha_mixing = true },
+		langs = { zhcn = true, ja = true, ko = true, en = true, alpha_mixing = true },
 	})
 	startup_ms = med(function()
 		vim.system({ bin }, { stdin = tiny }):wait()

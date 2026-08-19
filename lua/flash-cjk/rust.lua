@@ -50,8 +50,8 @@ function M.search(pattern, lines, langs)
 		pattern = pattern,
 		lines = lines,
 		langs = {
-			cn = langs.cn and true or false,
-			jp = langs.jp and true or false,
+			zhcn = langs.zhcn and true or false,
+			ja = langs.ja and true or false,
 			ko = langs.ko and true or false,
 			en = langs.en and true or false,
 			alpha_mixing = langs.alpha_mixing ~= false,

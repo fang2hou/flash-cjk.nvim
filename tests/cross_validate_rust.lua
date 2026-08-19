@@ -1,6 +1,8 @@
--- Cross-validation: for each pattern, the Rust matcher's span set must
--- be a superset of the vim-regex spans (vim reports non-overlapping
--- leftmost matches; Rust reports all spans including overlaps).
+-- Strict rust/vim-regex parity cross-validation plus seeded fuzz: for each
+-- pattern the span sequences of both paths must be identical item by
+-- item (vim reports non-overlapping leftmost matches). Run:
+--   nvim --headless -l tests/cross_validate_rust.lua
+-- Requires the release binary: cargo build --release --manifest-path rust/Cargo.toml
 package.path = "./lua/?.lua;./lua/?/init.lua;.deps/flash.nvim/lua/?.lua;.deps/flash.nvim/lua/?/init.lua;" .. package.path
 
 local fc = require("flash-cjk")
@@ -11,7 +13,7 @@ if not rust.available() then
 	return
 end
 
-local langs = { cn = true, jp = true, ko = true, en = true }
+local langs = { zhcn = true, ja = true, ko = true, en = true }
 
 local lines = {
 	"日本語テスト ちちはち 梯子 한국어 안녕하세요",

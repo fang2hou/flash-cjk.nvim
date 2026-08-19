@@ -42,7 +42,16 @@ return {{
             require("flash-cjk").jump()
         end,
         desc = "Flash between Chinese/Japanese/Korean"
-    }}
+    }},
+    opts = {
+        languages = {
+            zhcn = {force_key = "<C-c>"},  -- 默认：启用，方案 "xiaohe"
+            ja = {force_key = "<C-j>"},         -- 默认方案："roma"
+            ko = {force_key = "<C-k>"},
+            en = {force_key = "<C-e>"},         -- en 无方案概念
+        },
+        alpha_mixing = true,
+    }
 }, {
     "folke/flash.nvim",
     event = "VeryLazy",
@@ -72,48 +81,42 @@ Work in this repository. Read AGENTS.md at the repository root first and follow 
 - `ti` 同时匹配中文（梯/踢…）与日语（ち，训令式）；按下 `C-c` 后只剩中文读音——ち 不再匹配
 - 锁定会叠加进输入串：**退格删过标记即解除锁定**；按其他锁定键可直接切换
 - 锁定期间，英文字面匹配不受影响
-- 按键可配置（设为 `false` 可禁用）：
+- 锁定按键按语言在 `languages` 表中配置（`force_key`，设为 `false` 可禁用）——见下文
+
+### 语言配置
+
+每种语言都通过 `languages` 表独立配置——全局经 setup 设置，或按次跳转用语言代码数组 / 字段级覆盖：
 
 ```lua
 require("flash-cjk").setup({
-    force_keys = {
-        cn = "<C-c>",
-        jp = "<C-j>",
-        ko = "<C-k>",
-        en = "<C-e>",
+    languages = {
+        zhcn = {enabled = true, scheme = "xiaohe", force_key = "<C-c>"},
+        ja = {enabled = true, scheme = "roma", force_key = "<C-j>"},
+        ko = {enabled = true, scheme = "roma", force_key = "<C-k>"},
+        en = {enabled = true, force_key = "<C-e>"},  -- 无方案概念
     },
-})
-```
-
-### 语言开关
-
-每个匹配器都可独立开关——全局经 setup 设置，或通过语言代码数组只作用于某次跳转：
-
-```lua
-require("flash-cjk").setup({
-    cn = "xiaohe",   -- 中文拼音；true / false，或方案名
-    jp = "roma",     -- 日语罗马音（汉字读音 + 假名）
-    ko = "roma",     -- 韩语（罗马字 + 两拼（두벌식）键位）
-    en = true,       -- ASCII 字面字母（纯 flash.nvim 行为）
     alpha_mixing = true,
 })
 
-require("flash-cjk").jump({ "jp", "ko", "en" })  -- 本次跳转：不匹配中文
+require("flash-cjk").jump({ "ja", "ko", "en" })  -- 本次跳转：不匹配中文
+require("flash-cjk").jump(nil, { languages = { ja = { force_key = "<C-d>" } } })
 ```
 
-`cn`/`jp`/`ko` 接受 `true`（默认方案）、`false`（关闭）或方案名字符串——中文为 `"xiaohe"`，日语/韩语为 `"roma"`（目前仅有的方案，今后可扩展）。不带数组的 `jump()` 使用 setup 启用集；给定数组即完整决定该次跳转的启用集（`"kr"` 是 `"ko"` 的别名），并优先于 setup 开关。第二个参数用于透传 flash 选项：`jump(nil, { force_keys = { cn = "<C-d>" } })`。
+`scheme` 接受中文 `"xiaohe"`、日语/韩语 `"roma"`（目前仅有的方案，今后可扩展）；`en` 为 ASCII 字面匹配，无方案概念，给了会报错。条目也接受 `true`/`false` 简写（等价于 `enabled`）。`setup` 深合并：未给出的字段保留现值。不带数组的 `jump()` 使用 setup 启用集；给定数组即完整决定该次跳转的启用集（方案取该语言默认值），并优先于 setup 开关。第二个参数透传 flash 选项，其中 `languages` 只对本次跳转生效。
 
-单语言用户只需保留一个开关。注意事项：
+单语言用户只需保留一个语言启用。注意事项：
 
 - 关闭 `en` 后，数字与大写字母仍按字面匹配；无法解读的输入（如 `n.`）会退化为字面匹配。
-- 标点跟随语言开关：关闭 `cn` 时，`,` 匹配 、（日文）而非 ，（全角逗号）；`。` 为中日共用，始终匹配；`-` → ー 归属 `jp`。
+- 标点跟随语言开关：关闭 `zhcn` 时，`,` 匹配 、（日文）而非 ，（全角逗号）；`。` 为中日共用，始终匹配；`-` → ー 归属 `ja`。
 - `alpha_mixing = false`（性能选项）：丢弃字面字母与语言片段混排的解释（例如某些继承自 flash-zh 的 `nihao` 变体）；三语长输入下最坏情况延迟降低 40–60%，代价是部分混合链路不可达。
 
 ### 匹配规则
 
 - **中文**：小鹤双拼两键编码与拼音首字母——`ni` → 你，`r` → 日。
 - **日语**：汉字读音取自 Unicode Unihan（`kJapanese`/`On`/`Kun`，约 13,000 个汉字），按最长 3 个字母的罗马音前缀匹配（`n`/`ni`/`nic` 均命中 日）；假名匹配其音节的所有常见罗马字拼法（`si`/`shi`、`tu`/`tsu`）；拗音成对作为一个整体匹配（`sha` → しゃ/シャ）；`-` 匹配 ー，`[`/`]` → 「」『』，`,` → 、，`!` → ！。
-- **韩语**：音节按规则程序化分解为韩文字母（初声 × 中声 × 终声）——无需词典数据。罗马字：修订版（2000 年式），外加常见的 McCune-Reischauer 拼法（`kim`/`gim` → 김），逐音节按前缀匹配；两拼（두벌식）键位可同时使用（`dkss` → 안녕，`gkrry` → 학교，`dkswek` → 앉다）；紧音字母需按 shift——请改用罗马字（`kk`）；单元音片段可像日语元音一样出现在输入中间（`ai` → 아이）。\n\n## Rust 加速（可选）
+- **韩语**：音节按规则程序化分解为韩文字母（初声 × 中声 × 终声）——无需词典数据。罗马字：修订版（2000 年式），外加常见的 McCune-Reischauer 拼法（`kim`/`gim` → 김），逐音节按前缀匹配；两拼（두벌식）键位可同时使用（`dkss` → 안녕，`gkrry` → 학교，`dkswek` → 앉다）；紧音字母需按 shift——请改用罗马字（`kk`）；单元音片段可像日语元音一样出现在输入中间（`ai` → 아이）。
+
+## Rust 加速（可选）
 
 可选的原生匹配器一次构建、自动启用：按下方基准测试，每次按键的平均开销降低
 1.6×、p95 尾部延迟降低 4.1×，并且对正则选择分支已超出 Vim 编译上限（E872）的模式依然可用。上面

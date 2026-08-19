@@ -9,8 +9,8 @@ use std::sync::LazyLock;
 
 use crate::charset::CharSet;
 
-include!("../../../data/flypy.rs");
-include!("../../../data/jp_data.rs");
+include!("../../../data/zhcn_data.rs");
+include!("../../../data/ja_data.rs");
 include!("data/ko.rs");
 
 const SYL_BASE: u32 = 0xAC00;

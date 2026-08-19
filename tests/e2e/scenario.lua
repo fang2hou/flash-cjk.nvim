@@ -1,7 +1,8 @@
--- E2E scenario, executed by repro.lua inside the isolated lazy.nvim env.
--- Drives real flash-cjk jumps through the lazy-loaded plugin and writes
--- pass/fail lines to $FLASH_CJK_E2E_OUT (file signal: UI plugins like
--- noice swallow :lua output, so results go to a file).
+-- E2E scenario driven by repro.lua inside the isolated lazy.nvim env:
+-- real flash-cjk jumps through the lazy-loaded plugin, pass/fail lines
+-- written to $FLASH_CJK_E2E_OUT (file signal: UI plugins like noice
+-- swallow :lua output, so results go to a file). Run:
+--   tests/e2e/run.sh
 
 local out_path = assert(os.getenv("FLASH_CJK_E2E_OUT"), "FLASH_CJK_E2E_OUT required")
 local out = assert(io.open(out_path, "w"))
@@ -26,9 +27,15 @@ end
 -- 1. lazy.nvim installed and can load the spec.
 vim.cmd("Lazy load flash-cjk.nvim")
 local fc = require("flash-cjk")
+local cfg = require("flash-cjk.config")
 ok(type(fc.jump) == "function" and type(fc.remote) == "function", "lazy load: flash-cjk module resolves")
 
-ok(fc.config.cn == "xiaohe" and fc.config.jp == "roma" and fc.config.ko == "roma", "opts: lazy opts normalized into schemes")
+ok(
+    fc.config.languages.zhcn.scheme == "xiaohe"
+      and fc.config.languages.ja.scheme == "roma"
+      and fc.config.languages.ko.scheme == "roma",
+    "opts: lazy opts normalized into schemes"
+  )
 
 local rust = require("flash-cjk.rust")
 local no_rust = os.getenv("FLASH_CJK_E2E_NO_RUST") == "1"
@@ -43,7 +50,7 @@ ok(rust.available() ~= no_rust, "rust path: availability matches requested mode"
 -- wrapper that chains into flash-cjk's own labeler, so behavior under
 -- test is exactly build_opts' default.
 local last_state
-local keys = vim.tbl_deep_extend("force", {}, fc.config.force_keys)
+local keys = cfg.force_keys(fc.config.languages)
 
 local function jump_capture(opts)
   opts = opts or {}
@@ -148,7 +155,7 @@ end
 -- rust path silently return zero matches with no vim-regex fallback
 if not no_rust then
   do
-    local matcher = rust.matcher({ cn = true, jp = true, ko = true, en = true })
+    local matcher = rust.matcher({ zhcn = true, ja = true, ko = true, en = true })
     local fake = {
       pattern = {
         pattern = "ti",

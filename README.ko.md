@@ -50,7 +50,16 @@ return {{
             require("flash-cjk").jump()
         end,
         desc = "Flash between Chinese/Japanese/Korean"
-    }}
+    }},
+    opts = {
+        languages = {
+            zhcn = {force_key = "<C-c>"},  -- 기본값: 활성, 스킴 "xiaohe"
+            ja = {force_key = "<C-j>"},    -- 기본 스킴: "roma"
+            ko = {force_key = "<C-k>"},
+            en = {force_key = "<C-e>"},    -- en에는 스킴 개념이 없음
+        },
+        alpha_mixing = true,
+    }
 }, {
     "folke/flash.nvim",
     event = "VeryLazy",
@@ -87,44 +96,44 @@ Work in this repository. Read AGENTS.md at the repository root first and follow 
 - 고정 상태는 입력 문자열에 쌓입니다: **백스페이스로 마커를 지우면 고정이
   풀리며**, 다른 고정 키를 누르면 곧바로 전환됩니다
 - 고정 중에도 리터럴 영어 매칭은 영향을 받지 않습니다
-- 키는 설정으로 바꿀 수 있습니다(끄려면 `false`):
+- 고정 키는 언어별로 `languages` 테이블에서 설정합니다(`force_key`, `false`로 끄기) — 아래 참고
+
+### 언어 설정
+
+각 언어는 `languages` 테이블로 독립적으로 설정합니다 — setup으로 전역적으로,
+언어 코드 배열로 점프별로, 또는 필드 단위로 덮어쓰기:
 
 ```lua
 require("flash-cjk").setup({
-    force_keys = {
-        cn = "<C-c>",
-        jp = "<C-j>",
-        ko = "<C-k>",
-        en = "<C-e>",
+    languages = {
+        zhcn = {enabled = true, scheme = "xiaohe", force_key = "<C-c>"},
+        ja = {enabled = true, scheme = "roma", force_key = "<C-j>"},
+        ko = {enabled = true, scheme = "roma", force_key = "<C-k>"},
+        en = {enabled = true, force_key = "<C-e>"},  -- 스킴 개념 없음
     },
-})
-```
-
-### 언어 스위치
-
-각 매처는 서로 독립적으로 켜고 끌 수 있습니다 — setup으로 전역적으로, 또는 언어 코드 배열로 점프별로:
-
-```lua
-require("flash-cjk").setup({
-    cn = "xiaohe",   -- 중국어 병음. true / false 또는 스킴 이름
-    jp = "roma",     -- 일본어 로마지(한자 읽기 + 가나)
-    ko = "roma",     -- 한국어(로마자 표기 + 두벌식 키)
-    en = true,       -- 리터럴 ASCII 문자(일반 flash.nvim 동작)
     alpha_mixing = true,
 })
 
-require("flash-cjk").jump({ "jp", "ko", "en" })  -- 이번 점프에서는 중국어 제외
+require("flash-cjk").jump({ "ja", "ko", "en" })  -- 이번 점프에서는 중국어 제외
+require("flash-cjk").jump(nil, { languages = { ja = { force_key = "<C-d>" } } })
 ```
 
-`cn`/`jp`/`ko`는 `true`(기본 스킴), `false`(끄기) 또는 스킴 이름 문자열을 받습니다 — 중국어는 `"xiaohe"`, 일본어와 한국어는 `"roma"`(현재 유일한 스킴, 이후 확장 가능). 배열 없이 `jump()`를 호출하면 setup에서 켠 집합을 사용하고, 배열을 넘기면 그 점프의 활성 집합은 배열로만 완전히 결정됩니다(`"kr"`은 `"ko"`의 별칭). setup 스위치보다 우선하며, 두 번째 인자는 flash 옵션을 그대로 전달합니다: `jump(nil, { force_keys = { cn = "<C-d>" } })`.
+`scheme`은 중국어 `"xiaohe"`, 일본어와 한국어 `"roma"`를 받습니다(현재 유일한
+스킴, 이후 확장 가능). `en`은 ASCII 리터럴 매칭으로 스킴 개념이 없으며, 주면
+오류가 납니다. 항목은 `true`/`false` 약식 표기(`enabled` 상당)도 받습니다.
+`setup`은 깊게 병합되어 지정하지 않은 필드는 현재 값을 유지합니다. 배열 없이
+`jump()`를 호출하면 setup에서 켠 집합을 사용하고, 배열을 넘기면 그 점프의 활성
+집합은 배열로만 완전히 결정됩니다(스킴은 각 언어의 기본값). setup 스위치보다
+우선하며, 두 번째 인자는 flash 옵션을 그대로 전달하고 그 안의 `languages`는
+그 점프에만 적용됩니다.
 
-한 언어만 사용한다면 해당 스위치 하나만 켜 두면 됩니다. 참고 사항:
+한 언어만 사용한다면 해당 언어 하나만 켜 두면 충분합니다. 참고 사항:
 
 - `en`을 꺼도 숫자와 대문자는 여전히 문자 그대로 매칭되며, 해석할 수
   없는 입력(예: `n.`)은 리터럴 매칭으로 대체됩니다.
-- 문장 부호는 언어 스위치를 따릅니다: `cn`을 끄면 `,`는 ，(전각 쉼표)가
+- 문장 부호는 언어 스위치를 따릅니다: `zhcn`을 끄면 `,`는 ，(전각 쉼표)가
   아니라 、(일본어)에 매칭됩니다. `。`는 중국어/일본어가 공유하므로 항상
-  매칭되고, `-` → ー는 `jp`에 속합니다.
+  매칭되고, `-` → ー는 `ja`에 속합니다.
 - `alpha_mixing = false` (성능): 리터럴 문자와 언어 세그먼트를 섞는 해석을
   버립니다(예: flash-zh에서 물려받은 일부 `nihao` 변형). 긴 3개 언어 입력에서
   최악의 경우 지연 시간이 40–60% 줄어드는 대신, 일부 혼합 체인에는 도달할 수
@@ -145,7 +154,9 @@ require("flash-cjk").jump({ "jp", "ko", "en" })  -- 이번 점프에서는 중�
   두벌식 키도 함께 동작(`dkss` → 안녕, `gkrry` → 학교, `dkswek` → 앉다);
   경음(된소리) 자모는 Shift가 필요하니 로마자 표기(`kk`)를 대신 사용하세요;
   단일 모음 세그먼트는 일본어 모음처럼 입력 도중에도 동작합니다(`ai` →
-  아이).\n\n## Rust 가속 (선택 사항)
+  아이).
+
+## Rust 가속 (선택 사항)
 
 선택 사항인 네이티브 매처는 한 번 빌드되면 자동으로 켜집니다: 아래 벤치마크에서
 키 입력당 평균 비용은 1.6×, p95 꼬리 지연은 4.1× 개선됩니다. 또한 정규식
