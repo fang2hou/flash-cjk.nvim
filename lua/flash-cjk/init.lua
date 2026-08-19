@@ -71,7 +71,7 @@ local function build_opts(langs, opts)
 		},
 		actions = actions,
 		labeler = function(_, state)
-			require("flash-cjk.labeler").new(state, langs, keys):update()
+			require("flash-cjk.labeler").new(state, langs, keys, config.effective_priority(opts)):update()
 		end,
 	}
 	local rust_ok, rust = pcall(require, "flash-cjk.rust")
@@ -83,7 +83,7 @@ end
 
 ---Starts a flash jump with CJK matching.
 ---@param langs string[]? language codes for this jump, e.g. { "zhcn", "en" }
----@param opts table? flash options (plus languages overrides)
+---@param opts table? flash options (plus languages and priority overrides)
 function M.jump(langs, opts)
 	opts = opts or {}
 	get_flash().jump(build_opts(M.resolve_langs(langs, opts), opts))
@@ -91,7 +91,7 @@ end
 
 ---Starts a flash remote (operator-pending) jump with CJK matching.
 ---@param langs string[]? language codes for this jump, e.g. { "zhcn", "en" }
----@param opts table? flash options (plus languages overrides)
+---@param opts table? flash options (plus languages and priority overrides)
 function M.remote(langs, opts)
 	opts = opts or {}
 	get_flash().remote(build_opts(M.resolve_langs(langs, opts), opts))
@@ -104,6 +104,10 @@ end
 --   force_key = "<C-e>" } }; entries also accept the true/false
 --   shorthand.
 -- @field[opt] opts.alpha_mixing boolean Allow mixing literal letters into language chains.
+-- @field[opt] opts.priority string[] Language codes in label-assignment
+--   priority order, e.g. { "ja", "zhcn" }: matches reachable through
+--   earlier-listed languages receive their labels first (match sets
+--   and jump semantics unchanged; unset keeps position order).
 function M.setup(opts)
 	opts = opts or {}
 	local dirty = false
@@ -121,8 +125,9 @@ function M.setup(opts)
 		M.config.alpha_mixing = opts.alpha_mixing
 		dirty = true
 	end
-	if dirty then
-		M.mix_mode = M.make_mix_mode(config.lang_flags())
+	if opts.priority ~= nil then
+		-- labeler-layer only: the mix mode does not read it
+		M.config.priority = config.normalize_priority(opts.priority)
 	end
 end
 

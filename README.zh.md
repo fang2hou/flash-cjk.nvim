@@ -96,13 +96,17 @@ require("flash-cjk").setup({
         en = {enabled = true, force_key = "<C-e>"},  -- 无方案概念
     },
     alpha_mixing = true,
+    priority = { "ja", "zhcn" },  -- 标签顺序：优先日语匹配
 })
 
 require("flash-cjk").jump({ "ja", "ko", "en" })  -- 本次跳转：不匹配中文
 require("flash-cjk").jump(nil, { languages = { ja = { force_key = "<C-d>" } } })
+require("flash-cjk").jump(nil, { priority = { "ko" } })  -- 本次跳转：韩语匹配优先获得标签
 ```
 
 `scheme` 接受中文 `"xiaohe"`、日语/韩语 `"roma"`（目前仅有的方案，今后可扩展）；`en` 为 ASCII 字面匹配，无方案概念，给了会报错。条目也接受 `true`/`false` 简写（等价于 `enabled`）。`setup` 深合并：未给出的字段保留现值。不带数组的 `jump()` 使用 setup 启用集；给定数组即完整决定该次跳转的启用集（方案取该语言默认值），并优先于 setup 开关。第二个参数透传 flash 选项，其中 `languages` 只对本次跳转生效。
+
+`priority` 按语言决定标签分配顺序：排在前面的语言可达的匹配先拿到最早的标签（可被多种语言解释的匹配按其中优先级最高的语言归属），主力语言的目标更省 label 键。匹配集与跳转语义不变；未设置时保持位置顺序。
 
 单语言用户只需保留一个语言启用。注意事项：
 

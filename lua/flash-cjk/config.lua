@@ -29,6 +29,12 @@ local LANGS = { "zhcn", "ja", "ko", "en" }
 -- Per-jump overrides use the same shape: jump({ "zhcn", "en" }) is
 -- the enabled-set shorthand, jump(nil, { languages = ... }) overrides
 -- fields for one jump -- see M.resolve_langs.
+-- priority (top level): array of language codes, e.g.
+--   { "ja", "zhcn" }; matches reachable through earlier-listed
+--   languages receive their labels first, so targets in the
+--   prioritized language sit on the earliest labels. Label
+--   assignment order only -- match sets and jump semantics are
+--   unchanged, and unset (the default) keeps plain position order.
 M.config = {
 	languages = {
 		zhcn = { enabled = true, scheme = "xiaohe", force_key = "<C-c>" },
@@ -172,6 +178,40 @@ function M.resolve_langs(ary, opts)
 		langs[code] = true
 	end
 	return langs
+end
+
+---Validates a priority list: elements must be known language codes;
+---duplicates are meaningless and dropped (first occurrence wins).
+---@param value string[] language codes in priority order
+---@return string[] priority deduped
+function M.normalize_priority(value)
+	if type(value) ~= "table" then
+		error("flash-cjk: priority must be an array of language codes")
+	end
+	local seen = {}
+	local out = {}
+	for _, code in ipairs(value) do
+		if not vim.list_contains(LANGS, code) then
+			error("flash-cjk: unknown language code: " .. tostring(code))
+		end
+		if not seen[code] then
+			seen[code] = true
+			out[#out + 1] = code
+		end
+	end
+	return out
+end
+
+---Effective label-assignment priority for one jump: the per-jump
+---override when given, otherwise the setup value. nil (or an empty
+---list) means position order.
+---@param opts table? jump/remote opts
+---@return string[]? priority
+function M.effective_priority(opts)
+	if opts and opts.priority ~= nil then
+		return M.normalize_priority(opts.priority)
+	end
+	return M.config.priority
 end
 
 return M

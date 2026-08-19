@@ -4,7 +4,9 @@
 //!
 //! Protocol: one JSON request on stdin, one JSON response on stdout.
 //! Request:  {"pattern": "ti", "lines": ["..", ".."], "langs": {...}}
-//! Response: {"matches": [[line, byte_col, byte_len], ...]}
+//! Response: {"matches": [[line, byte_col, byte_len], ...],
+//!           "predictions": ["i", ...],
+//!           "pred_langs": [["ja"], ...]}
 
 use std::io::{self, Read, Write};
 
@@ -59,6 +61,11 @@ struct Response {
     matches: Vec<[usize; 4]>,
     /// per-match predicted next letters (may be empty)
     predictions: Vec<String>,
+    /// per-match attributed language codes, parallel to `matches`:
+    /// the languages the current pattern could have reached the match
+    /// through ("zhcn"/"ja"/"ko" for engine spellings, "en" for
+    /// literal ASCII spans; may be empty, e.g. punctuation)
+    pred_langs: Vec<Vec<String>>,
 }
 
 fn run() -> anyhow::Result<()> {
@@ -73,29 +80,29 @@ fn run() -> anyhow::Result<()> {
     // labeler prediction per match: the matched text plus the character
     // right after it (mirrors labeler.match_strs on the Lua side)
     let (clean, _) = flash_cjk_core::parser::parse_forced(&req.pattern);
-    let predictions: Vec<String> = found
-        .iter()
-        .map(|m| {
-            let line = &req.lines[m.line];
-            let start = m.col;
-            let end = m.col + m.len;
-            let next_end = line[end..]
-                .chars()
-                .next()
-                .map(|c| end + c.len_utf8())
-                .unwrap_or(end);
-            let text = &line[start..next_end];
-            flash_cjk_core::predict::next_letters(&clean, text, &langs)
-                .into_iter()
-                .collect::<String>()
-        })
-        .collect();
+    let mut predictions: Vec<String> = Vec::with_capacity(found.len());
+    let mut pred_langs: Vec<Vec<String>> = Vec::with_capacity(found.len());
+    for m in &found {
+        let line = &req.lines[m.line];
+        let start = m.col;
+        let end = m.col + m.len;
+        let next_end = line[end..]
+            .chars()
+            .next()
+            .map(|c| end + c.len_utf8())
+            .unwrap_or(end);
+        let text = &line[start..next_end];
+        let (letters, tags) = flash_cjk_core::predict::predict(&clean, text, &langs);
+        predictions.push(letters.into_iter().collect());
+        pred_langs.push(tags.into_iter().map(str::to_string).collect());
+    }
     let resp = Response {
         matches: found
             .into_iter()
             .map(|m| [m.line, m.col, m.end_col, m.len])
             .collect(),
         predictions,
+        pred_langs,
     };
     let mut out = io::stdout().lock();
     serde_json::to_writer(&mut out, &resp).context("writing response")?;
