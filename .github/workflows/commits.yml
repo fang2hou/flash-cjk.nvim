@@ -26,7 +26,10 @@ jobs:
       - name: Check commit messages (cog)
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
-        run: cog check $BASE..HEAD
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git fetch origin "$HEAD_SHA"
+          cog check "$BASE..$HEAD_SHA"
       - name: Validate PR title (becomes the squash commit message)
         env:
           TITLE: ${{ github.event.pull_request.title }}
