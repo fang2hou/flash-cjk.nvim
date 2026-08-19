@@ -60,7 +60,7 @@ Follow the guidelines repository's coding standards. Project-specific rules:
 
 - English comments explaining _why_, EmmyLua annotations on public functions
 - Two matching paths must stay behaviorally identical — change both or neither
-- Generated files (`jp_data.lua`, `rust/data/`) change only via `mise run codegen`
+- Generated files (`jaData.lua`, `rust/data/`) change only via `mise run codegen`
 - Rust: edition 2024, MSRV tracks latest stable (currently 1.97), clippy `-D warnings`, no `unsafe`
 
 ## Testing

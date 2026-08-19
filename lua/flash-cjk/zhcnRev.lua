@@ -1,4 +1,4 @@
-local flypy = require("flash-cjk.flypy")
+local zhcn = require("flash-cjk.zhcnData")
 
 local M = {}
 
@@ -47,7 +47,7 @@ local function utf8_sub(str, startChar, numChars) --截取中文字符串
 end
 
 local function init_py_table()
-	for k, v in pairs(flypy.char2patterns) do
+	for k, v in pairs(zhcn.char2patterns) do
 		local start_char, end_char = v:find("%[(.-)%]")
 		v = v:sub(start_char + 1, end_char - 1)
 		for i = 1, utf8_len(v) do
@@ -55,7 +55,7 @@ local function init_py_table()
 			py_table:insert(char, k)
 		end
 	end
-	for k, v in pairs(flypy.comma) do
+	for k, v in pairs(zhcn.comma) do
 		local start_char, end_char = v:find("%[(.-)%]")
 		v = v:sub(start_char + 1, end_char - 1)
 		for i = 1, utf8_len(v) do

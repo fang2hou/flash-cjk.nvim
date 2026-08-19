@@ -2,17 +2,17 @@
 -- lock markers and the mixed-mode pattern compiler. Independent of
 -- flash.nvim -- init.lua drives these through jump/remote/setup.
 
-local flypy = require("flash-cjk.flypy")
+local zhcn = require("flash-cjk.zhcnData")
 local config = require("flash-cjk.config")
 
 local M = {}
 
-local jp ---@type table?
-local function get_jp()
-	if jp == nil then
-		jp = require("flash-cjk.jp")
+local ja ---@type table?
+local function get_ja()
+	if ja == nil then
+		ja = require("flash-cjk.ja")
 	end
-	return jp
+	return ja
 end
 
 local ko ---@type table?
@@ -51,9 +51,9 @@ local function comma_map(langs)
 	local map = comma_cache[key]
 	if not map then
 		map = {}
-		local cn_tbl = langs.cn and flypy.comma or {}
-		local jp_tbl = langs.jp and get_jp().comma or {}
-		for _, src in ipairs({ cn_tbl, jp_tbl }) do
+		local cn_tbl = langs.cn and zhcn.comma or {}
+		local ja_tbl = langs.jp and get_ja().comma or {}
+		for _, src in ipairs({ cn_tbl, ja_tbl }) do
 			for k, v in pairs(src) do
 				map[k] = merge_class(map[k], v)
 			end
@@ -88,22 +88,22 @@ local function make_nodes(comma)
 			return "[" .. str .. string.upper(str) .. "]"
 		end,
 		pinyin = function(str)
-			return flypy.char2patterns[str]
+			return zhcn.char2patterns[str]
 		end,
 		comma = function(str)
 			return comma[str]
 		end,
 		singlepin = function(str)
-			return flypy.char1patterns[str]
+			return zhcn.char1patterns[str]
 		end,
 		jp = function(str)
-			return get_jp().pattern(str)
+			return get_ja().pattern(str)
 		end,
 		ko = function(str)
 			return get_ko().pattern(str)
 		end,
 		other = function(str)
-			str = flypy.escape[str] or str
+			str = zhcn.escape[str] or str
 			return str
 		end,
 	}
@@ -158,7 +158,7 @@ local function parser(str, prefix, ctx)
 				p2[#p2 + 1] = { str = firstchar, type = "singlepin" }
 				results = merge_table(results, parser("", p2, ctx))
 			end
-			if ctx.langs.jp and get_jp().pattern(firstchar) then
+			if ctx.langs.jp and get_ja().pattern(firstchar) then
 				local p3 = copy(prefix)
 				p3[#p3 + 1] = { str = firstchar, type = "jp" }
 				results = merge_table(results, parser("", p3, ctx))
@@ -178,14 +178,14 @@ local function parser(str, prefix, ctx)
 			-- interpretation (prefix._alpha): mixed chains multiply the
 			-- alternatives and each giant CJK character class makes vim's
 			-- regex execution measurably slower.
-			if ctx.langs.cn and flypy.char2patterns[firstchar .. secondchar] then
+			if ctx.langs.cn and zhcn.char2patterns[firstchar .. secondchar] then
 				local p = copy(prefix)
 				p._alpha = false
 				p[#p + 1] = { str = firstchar .. secondchar, type = "pinyin" }
 				results = merge_table(results, parser(string.sub(str, 3), p, ctx))
 			end
 			if ctx.langs.jp then
-				local J = get_jp()
+				local J = get_ja()
 				local two = firstchar .. secondchar
 				local three = two .. thirdchar
 				if string.match(thirdchar, "%a") and J.pattern(three) then

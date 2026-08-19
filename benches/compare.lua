@@ -18,8 +18,8 @@ package.path = "./lua/?.lua;./lua/?/init.lua;" .. package.path
 
 local rust = require("flash-cjk.rust")
 local fc = require("flash-cjk")
-local flypy = require("flash-cjk.flypy")
-local jp_data = require("flash-cjk.jp_data")
+local flypy = require("flash-cjk.zhcnData")
+local jp_data = require("flash-cjk.jaData")
 local ko = require("flash-cjk.ko")
 
 if not rust.available() then

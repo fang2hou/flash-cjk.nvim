@@ -26,7 +26,7 @@ input letter.
 - `util.lua` — shared helpers
 - `labeler.lua` — flash labeler: next-letter prediction (from spellings or the Rust matcher's per-match predictions), skip-set, monotonic label pool
 - `rust.lua` — bridge to the native binary: per-keystroke spawn, JSON protocol, fallback circuit breaker to the vim-regex path
-- data modules (`pinyin.lua`, `flypy.lua`, `jp.lua`, `ko.lua`, `jp_data.lua`) — char-class tables and per-language pattern helpers; `jp_data.lua` is generated
+- data modules (`zhcnData.lua`, `jaData.lua`, `zhcnRev.lua`, `ja.lua`, `ko.lua`) — char-class tables and per-language pattern helpers; `jaData.lua` is generated
 - `flash-cjk-core` (Rust lib) — charset, parser, DP matcher, prediction; mirrors Lua semantics
 - `flash-cjk-search` (Rust binary) — stdin/stdout JSON front for the core
 - `tests/` — behavior suite, strict rust↔vim cross-validation and fuzz, LazyVim-style e2e
@@ -41,7 +41,7 @@ What must remain true about the architecture:
   order wins, spans never overlap). Enforced by `tests/cross_validate_rust.lua`
   and the e2e parity check; any matcher change updates both paths.
 - **Data single source**: the Lua tables are the source of truth.
-  `jp_data.lua` is generated from Unihan (`scripts/gen_jp_data.py`); every
+  `jaData.lua` is generated from Unihan (`scripts/gen_jp_data.py`); every
   Rust static table — Chinese, Japanese, Korean jamo and punctuation — is
   generated from the Lua tables by `scripts/export_rs.lua` into `rust/data/`
   and `rust/crates/flash-cjk-core/src/data/`. Generated files are never

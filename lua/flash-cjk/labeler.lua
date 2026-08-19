@@ -1,4 +1,4 @@
-local pinyin = require("flash-cjk.pinyin")
+local zhcnRev = require("flash-cjk.zhcnRev")
 
 local M = {}
 M.__index = M
@@ -47,10 +47,10 @@ function M:match_strs(line, start_col, end_col, langs)
 	local text = string.sub(line, start_col, end_col + size)
 	local strs = {}
 	if langs.cn then
-		vim.list_extend(strs, pinyin.pinyin(text))
+		vim.list_extend(strs, zhcnRev.pinyin(text))
 	end
 	if langs.jp then
-		vim.list_extend(strs, require("flash-cjk.jp").romaji_strs(text))
+		vim.list_extend(strs, require("flash-cjk.ja").romaji_strs(text))
 	end
 	if langs.ko then
 		vim.list_extend(strs, require("flash-cjk.ko").strs(text))

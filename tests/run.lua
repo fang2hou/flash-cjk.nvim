@@ -23,7 +23,7 @@ end
 setup_rtp()
 
 local fc = require("flash-cjk")
-local jp = require("flash-cjk.jp")
+local ja = require("flash-cjk.ja")
 local ko = require("flash-cjk.ko")
 
 local passed, failed = 0, 0
@@ -51,11 +51,11 @@ local no_orig = fc.make_mix_mode({ cn = true, jp = true, en = false })
 -- ---------------------------------------------------------------------------
 -- data sanity
 
-ok(jp.pattern("ni"):match("日", 1, true), "p2.ni contains 日")
-ok(jp.pattern("ni"):match("に", 1, true), "p2.ni contains に")
-ok(jp.pattern("ni"):match("ニ", 1, true), "p2.ni contains ニ")
-ok(jp.pattern("tsu") and jp.pattern("tsu"):match("つ", 1, true), "p3.tsu contains つ")
-ok(jp.pattern("sha") and jp.pattern("sha"):match("しゃ", 1, true), "p3.sha contains しゃ combo")
+ok(ja.pattern("ni"):match("日", 1, true), "p2.ni contains 日")
+ok(ja.pattern("ni"):match("に", 1, true), "p2.ni contains に")
+ok(ja.pattern("ni"):match("ニ", 1, true), "p2.ni contains ニ")
+ok(ja.pattern("tsu") and ja.pattern("tsu"):match("つ", 1, true), "p3.tsu contains つ")
+ok(ja.pattern("sha") and ja.pattern("sha"):match("しゃ", 1, true), "p3.sha contains しゃ combo")
 ok(not matches(jp_only, "ni", "们"), "jp-only: ni does not match zh-only char 们")
 
 -- ---------------------------------------------------------------------------
@@ -177,7 +177,7 @@ ok(matches(mixed, ",", "，"), "mixed: comma matches ，")
 -- ---------------------------------------------------------------------------
 -- labeler reading prediction
 
-local strs = jp.romaji_strs("日本")
+local strs = ja.romaji_strs("日本")
 local found = false
 for _, s in ipairs(strs) do
 	if s == "nichihon" then
@@ -186,7 +186,7 @@ for _, s in ipairs(strs) do
 end
 ok(found, "romaji_strs(日本) includes nichihon")
 
-local sha_strs = jp.romaji_strs("しゃ")
+local sha_strs = ja.romaji_strs("しゃ")
 found = false
 for _, s in ipairs(sha_strs) do
 	if s == "sha" then

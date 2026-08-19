@@ -3,7 +3,7 @@
 # requires-python = ">=3.12"
 # dependencies = []
 # ///
-"""Generate lua/flash-cjk/jp_data.lua from the Unicode Unihan database.
+"""Generate lua/flash-cjk/jaData.lua from the Unicode Unihan database.
 
 Data sources (per kanji):
   - kJapanese: readings in kana, most complete (preferred)
@@ -35,7 +35,7 @@ from pathlib import Path
 
 UNIHAN_VERSION = "16.0.0"
 UNIHAN_URL = f"https://www.unicode.org/Public/{UNIHAN_VERSION}/ucd/Unihan.zip"
-OUT = Path(__file__).resolve().parent.parent / "lua" / "flash-cjk" / "jp_data.lua"
+OUT = Path(__file__).resolve().parent.parent / "lua" / "flash-cjk" / "jaData.lua"
 
 MAX_READINGS_PER_KANJI = 12
 MAX_VARIANTS_PER_READING = 8
