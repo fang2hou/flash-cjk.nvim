@@ -47,7 +47,7 @@ return {{
         "s",
         mode = {"n", "x", "o"},
         function()
-            require("flash-cjk").jump({})
+            require("flash-cjk").jump()
         end,
         desc = "Flash between Chinese/Japanese/Korean"
     }}
@@ -98,31 +98,32 @@ require("flash-cjk").setup({
         cn = "<C-c>",
         jp = "<C-j>",
         ko = "<C-k>",
-        eo = "<C-e>",
+        en = "<C-e>",
     },
 })
 ```
 
 ### 언어 스위치
 
-각 매처는 서로 독립적으로 켜고 끌 수 있습니다 — 전역으로, 또는 점프별로:
+각 매처는 서로 독립적으로 켜고 끌 수 있습니다 — setup으로 전역적으로, 또는 언어 코드 배열로 점프별로:
 
 ```lua
 require("flash-cjk").setup({
-    langs = {
-        cn = true,       -- 중국어 병음(flypy + 초성)
-        jp = true,       -- 일본어 로마지(한자 읽기 + 가나)
-        ko = true,       -- 한국어(로마자 표기 + 두벌식 키)
-        original = true, -- 리터럴 ASCII 문자(일반 flash.nvim 동작)
-    },
+    cn = "xiaohe",   -- 중국어 병음. true / false 또는 스킴 이름
+    jp = "roma",     -- 일본어 로마지(한자 읽기 + 가나)
+    ko = "roma",     -- 한국어(로마자 표기 + 두벌식 키)
+    en = true,       -- 리터럴 ASCII 문자(일반 flash.nvim 동작)
+    alpha_mixing = true,
 })
 
-require("flash-cjk").jump({ langs = { cn = false } })  -- 이번 점프에서는 중국어 제외
+require("flash-cjk").jump({ "jp", "ko", "en" })  -- 이번 점프에서는 중국어 제외
 ```
+
+`cn`/`jp`/`ko`는 `true`(기본 스킴), `false`(끄기) 또는 스킴 이름 문자열을 받습니다 — 중국어는 `"xiaohe"`, 일본어와 한국어는 `"roma"`(현재 유일한 스킴, 이후 확장 가능). 배열 없이 `jump()`를 호출하면 setup에서 켠 집합을 사용하고, 배열을 넘기면 그 점프의 활성 집합은 배열로만 완전히 결정됩니다(`"kr"`은 `"ko"`의 별칭). setup 스위치보다 우선하며, 두 번째 인자는 flash 옵션을 그대로 전달합니다: `jump(nil, { force_keys = { cn = "<C-d>" } })`.
 
 한 언어만 사용한다면 해당 스위치 하나만 켜 두면 됩니다. 참고 사항:
 
-- `original`을 꺼도 숫자와 대문자는 여전히 문자 그대로 매칭되며, 해석할 수
+- `en`을 꺼도 숫자와 대문자는 여전히 문자 그대로 매칭되며, 해석할 수
   없는 입력(예: `n.`)은 리터럴 매칭으로 대체됩니다.
 - 문장 부호는 언어 스위치를 따릅니다: `cn`을 끄면 `,`는 ，(전각 쉼표)가
   아니라 、(일본어)에 매칭됩니다. `。`는 중국어/일본어가 공유하므로 항상

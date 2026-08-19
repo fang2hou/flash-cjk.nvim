@@ -47,7 +47,7 @@ return {{
         "s",
         mode = {"n", "x", "o"},
         function()
-            require("flash-cjk").jump({})
+            require("flash-cjk").jump()
         end,
         desc = "Flash between Chinese/Japanese/Korean"
     }}
@@ -96,32 +96,39 @@ require("flash-cjk").setup({
         cn = "<C-c>",
         jp = "<C-j>",
         ko = "<C-k>",
-        eo = "<C-e>",
+        en = "<C-e>",
     },
 })
 ```
 
 ### Language switches
 
-Each matcher toggles independently — globally or per jump:
+Each matcher toggles independently — globally via setup, or per jump via a
+language-code array:
 
 ```lua
 require("flash-cjk").setup({
-    langs = {
-        cn = true,       -- Chinese pinyin (flypy + initials)
-        jp = true,       -- Japanese romaji (kanji readings + kana)
-        ko = true,       -- Korean (romanization + two-set keys)
-        original = true, -- literal ASCII letters (plain flash.nvim behavior)
-    },
+    cn = "xiaohe",   -- Chinese pinyin; true / false, or a scheme name
+    jp = "roma",     -- Japanese romaji (kanji readings + kana)
+    ko = "roma",     -- Korean (romanization + two-set keys)
+    en = true,       -- literal ASCII letters (plain flash.nvim behavior)
+    alpha_mixing = true,
 })
 
-require("flash-cjk").jump({ langs = { cn = false } })  -- this jump: no Chinese
+require("flash-cjk").jump({ "jp", "ko", "en" })  -- this jump: no Chinese
 ```
+
+`cn`/`jp`/`ko` accept `true` (the default scheme), `false` (off), or a scheme
+name — `"xiaohe"` for Chinese, `"roma"` for Japanese/Korean (the only schemes
+today; more can plug in later). `jump()` without an array uses the
+setup-enabled set; a given array fully decides that jump's set (`"kr"` is an
+alias of `"ko"`) and overrides the setup switches. The second argument passes
+flash options through: `jump(nil, { force_keys = { cn = "<C-d>" } })`.
 
 Single-language users keep one switch on. Notes:
 
-- With `original` off, digits and uppercase still match literally;
-  uninterpretable input (like `n.`) degrades to literal matching.
+- With `en` off, digits and uppercase still match literally; uninterpretable
+  input (like `n.`) degrades to literal matching.
 - Punctuation follows the language switches: with `cn` off, `,` matches 、
   (Japanese) instead of ，(fullwidth comma); `。` is shared by zh/ja and always
   matches; `-` → ー belongs to `jp`.
