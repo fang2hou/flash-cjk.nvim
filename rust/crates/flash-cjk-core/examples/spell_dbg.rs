@@ -4,7 +4,7 @@ fn main() {
     let ni: Vec<&String> = sp.iter().filter(|s| s.starts_with("ni")).collect();
     println!("ni-prefixed: {:?}", ni);
     println!(
-        "letters: {:?}",
-        flash_cjk_core::predict::next_letters("ni", "日本", &flash_cjk_core::Langs::default())
+        "letters/tags: {:?}",
+        flash_cjk_core::predict::predict("ni", "日本", &flash_cjk_core::Langs::default())
     );
 }

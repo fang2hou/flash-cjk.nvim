@@ -101,8 +101,9 @@ function M:skip(win, labels)
 			-- matches; use them instead of expanding spellings in Lua
 			local pred = preds and preds[string.format("%d:%d:%d", match.pos[1], match.pos[2], match.end_pos[2])]
 			if pred then
-				for i = 1, #pred do
-					local char = string.sub(pred, i, i)
+				local pt = pred.text
+				for i = 1, #pt do
+					local char = string.sub(pt, i, i)
 					skip_set[ignorecase and char:lower() or char] = true
 				end
 			else

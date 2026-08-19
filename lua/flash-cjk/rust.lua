@@ -13,8 +13,12 @@ local FAIL_LIMIT = 3
 local fails = 0
 
 -- Per-keystroke prediction cache filled by the matcher, keyed by
--- win -> "line:col:end" (labeler lookups carry the match's win); the
--- labeler consumes it instead of expanding spellings in Lua.
+-- win -> "line:col:end" -> { text = <next letters>, langs = { <lang
+-- codes> } } (labeler lookups carry the match's win); the labeler
+-- consumes it instead of expanding spellings in Lua. `langs` holds
+-- the attributed language codes of the match -- the interpretations
+-- the current pattern could have taken (empty for punctuation and
+-- when the binary predates the tags).
 M.predictions = setmetatable({}, { __index = function(t, k)
 	local v = {}
 	rawset(t, k, v)
@@ -43,7 +47,7 @@ end
 ---@param pattern string raw pattern (lock markers included)
 ---@param lines string[] visible buffer lines
 ---@param langs table language flags
----@return table? response { matches = { {line,col,end_col,len}... }, predictions = { string... } }
+---@return table? response { matches = { {line,col,end_col,len}... }, predictions = { string... }, pred_langs = { { string... }... } }
 function M.search(pattern, lines, langs)
 	local path = find_bin()
 	local req = vim.json.encode({
@@ -122,6 +126,7 @@ function M.matcher(langs)
 		local keep = {}
 		local found = resp.matches
 		local preds = resp.predictions or {}
+		local lang_tags = resp.pred_langs
 		for i, m in ipairs(found) do
 			-- Rust line indices are 0-based into the `lines` slice, which
 			-- starts at buffer line `from` (visible top) -- convert to
@@ -136,7 +141,7 @@ function M.matcher(langs)
 				}
 				local key = string.format("%d:%d:%d", line, col, end_col)
 				keep[key] = true
-				M.predictions[win][key] = preds[i] or ""
+				M.predictions[win][key] = { text = preds[i] or "", langs = lang_tags and lang_tags[i] or {} }
 			end
 		end
 		-- drop this window's stale predictions only: other windows are

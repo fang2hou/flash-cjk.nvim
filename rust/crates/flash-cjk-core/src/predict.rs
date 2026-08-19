@@ -3,8 +3,9 @@
 //! `ko.strs`): enumerate the spellings the matched text (plus the
 //! character right after it) could have been typed as, keep those that
 //! start with the current clean pattern, and collect the letter that
-//! follows it.
-
+//! follows it. Every prediction carries the language whose engine
+//! produced it (the labeler's language priority ranks matches by these
+//! tags); literal ASCII spans are tagged "en".
 use crate::data::{CN_REVERSE, data};
 /// Korean syllable -> spellings (romaji variants + two-set keys),
 /// mirroring ko.lua `strs`.
@@ -33,6 +34,17 @@ enum Engine {
     Cn,
     Jp,
     Ko,
+}
+
+impl Engine {
+    /// Protocol language code for this engine's spellings.
+    fn lang(self) -> &'static str {
+        match self {
+            Engine::Cn => "zhcn",
+            Engine::Jp => "ja",
+            Engine::Ko => "ko",
+        }
+    }
 }
 
 impl Engine {
@@ -98,21 +110,57 @@ pub fn spellings(text: &str, langs: &crate::parser::Langs) -> Vec<String> {
     out
 }
 
-/// The set of letters the user may type next: spellings starting with
-/// `clean_pattern` (ascii) contribute their next letter at byte position
-/// `pattern.len()`.
-pub fn next_letters(clean_pattern: &str, text: &str, langs: &crate::parser::Langs) -> Vec<char> {
+/// Per-match prediction: the letters the user may type next (spellings
+/// starting with `clean_pattern` contribute the letter at byte position
+/// `clean_pattern.len()`) and the languages the current pattern could
+/// have reached `text` through -- one tag per engine with at least one
+/// such spelling, plus "en" for literal ASCII spans. Mirrors
+/// `labeler.match_langs` on the Lua side.
+pub fn predict(
+    clean_pattern: &str,
+    text: &str,
+    langs: &crate::parser::Langs,
+) -> (Vec<char>, Vec<&'static str>) {
     let plen = clean_pattern.len();
-    let mut out = Vec::new();
-    for s in spellings(text, langs) {
-        if s.len() > plen && s.as_bytes().starts_with(clean_pattern.as_bytes()) {
-            let c = s[plen..].chars().next().unwrap();
-            if !out.contains(&c) {
-                out.push(c);
+    let mut letters: Vec<char> = Vec::new();
+    let mut tags: Vec<&'static str> = Vec::new();
+    // Text starting with a literal ASCII alphanumeric is reached in
+    // the "en" domain: engines pass ASCII through unchanged, so their
+    // spellings carry no language information for such spans -- they
+    // still contribute letters, but never a tag.
+    let literal = text
+        .chars()
+        .next()
+        .is_some_and(|c| c.is_ascii_alphanumeric());
+    let engines = [
+        (Engine::Cn, langs.zhcn, false),
+        (Engine::Jp, langs.ja, true),
+        (Engine::Ko, langs.ko, true),
+    ];
+    for &(engine, on, capped) in engines.iter() {
+        if !on {
+            continue;
+        }
+        let mut tagged = false;
+        for s in engine_spellings(text, engine, capped) {
+            if s.as_bytes().starts_with(clean_pattern.as_bytes()) {
+                tagged = !literal;
+                if s.len() > plen {
+                    let c = s[plen..].chars().next().unwrap();
+                    if !letters.contains(&c) {
+                        letters.push(c);
+                    }
+                }
             }
         }
+        if tagged {
+            tags.push(engine.lang());
+        }
     }
-    out
+    if literal && langs.en {
+        tags.push("en");
+    }
+    (letters, tags)
 }
 
 #[cfg(test)]
@@ -124,7 +172,7 @@ mod tests {
     fn predicts_continuation_of_kanji_reading() {
         // 日 spells include "nichi": with pattern "n" the next letter is i
         let langs = Langs::default();
-        let letters = next_letters("n", "日", &langs);
+        let (letters, _) = predict("n", "日", &langs);
         assert!(letters.contains(&'i'), "{letters:?}");
     }
 
@@ -133,7 +181,7 @@ mod tests {
         // pattern "ni" fully covers 日 (spelled niki/niti/nichi/...);
         // continuations pick up 本: k/t/c
         let langs = Langs::default();
-        let letters = next_letters("ni", "日本", &langs);
+        let (letters, _) = predict("ni", "日本", &langs);
         assert!(letters.contains(&'t'), "{letters:?}"); // niti...
         assert!(letters.contains(&'k'), "{letters:?}"); // niki...
         assert!(letters.contains(&'c'), "{letters:?}"); // nichi...
@@ -143,14 +191,45 @@ mod tests {
     fn korean_two_set_prediction() {
         let langs = Langs::default();
         // 안 spells: an (romaja), dks (two-set); pattern "d" -> next k
-        let letters = next_letters("d", "안", &langs);
+        let (letters, tags) = predict("d", "안", &langs);
         assert!(letters.contains(&'k'), "{letters:?}");
+        assert_eq!(tags, vec!["ko"]);
     }
 
     #[test]
     fn ascii_passthrough() {
         let langs = Langs::default();
-        let letters = next_letters("n", "nice", &langs);
+        let (letters, tags) = predict("n", "nice", &langs);
         assert!(letters.contains(&'i'));
+        // literal ASCII span: attributed to "en" only, never to the
+        // CJK engines whose spellings happen to pass ASCII through
+        assert_eq!(tags, vec!["en"]);
+    }
+
+    #[test]
+    fn tags_every_engine_that_extends_the_pattern() {
+        // 梯 is xiaohe "ti" and reads tai/tei in Japanese: pattern "t"
+        // is reachable through both engines
+        let langs = Langs::default();
+        let (_, tags) = predict("t", "梯", &langs);
+        assert!(tags.contains(&"zhcn") && tags.contains(&"ja"), "{tags:?}");
+        // ち is kana: only the Japanese engine can extend "ti"
+        let (_, tags) = predict("ti", "ち", &langs);
+        assert_eq!(tags, vec!["ja"]);
+    }
+
+    #[test]
+    fn tags_follow_the_enabled_languages() {
+        let langs = Langs {
+            zhcn: false,
+            ja: true,
+            ko: false,
+            en: false,
+            alpha_mixing: true,
+        };
+        let (_, tags) = predict("t", "梯", &langs);
+        assert_eq!(tags, vec!["ja"]);
+        let (_, tags) = predict("n", "nice", &langs);
+        assert!(tags.is_empty());
     }
 }

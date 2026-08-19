@@ -84,6 +84,36 @@ if fails > 0 then error(fails .. " cross-validation failures") end
 print("CROSS-VALIDATION PASSED (strict equality)")
 
 -- ---------------------------------------------------------------------------
+-- protocol shape: every response must carry per-match language tags
+-- parallel to the matches
+do
+	local valid = { zhcn = true, ja = true, ko = true, en = true }
+	local checked = 0
+	for _, p in ipairs(patterns) do
+		local resp = rust.search(p, lines, langs)
+		local tags = (resp and resp.pred_langs) or nil
+		if tags == nil then
+			error(("protocol: pred_langs missing for %q"):format(p))
+		end
+		if #tags ~= #(resp.matches) then
+			error(("protocol: pred_langs not parallel to matches for %q"):format(p))
+		end
+		for _, entry in ipairs(tags) do
+			if type(entry) ~= "table" then
+				error(("protocol: pred_langs entry not an array for %q"):format(p))
+			end
+			for _, lang in ipairs(entry) do
+				if not valid[lang] then
+					error(("protocol: unknown language tag %q"):format(lang))
+				end
+				checked = checked + 1
+			end
+		end
+	end
+	print(string.format("PRED_LANGS PASSED (%d tags over %d patterns)", checked, #patterns))
+end
+
+-- ---------------------------------------------------------------------------
 -- fuzz: random patterns and mixed-CJK lines, vim vs rust must agree
 math.randomseed(42) -- deterministic
 local alphabet = { "a", "e", "i", "o", "u", "n", "k", "s", "t", "h", "d", "r", "g", "b", "m", "y", "c", "l", "p", "z" }
