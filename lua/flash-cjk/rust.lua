@@ -122,23 +122,23 @@ function M.matcher(langs)
 		local keep = {}
 		local found = resp.matches
 		local preds = resp.predictions or {}
-	for i, m in ipairs(found) do
-		-- Rust line indices are 0-based into the `lines` slice, which
-		-- starts at buffer line `from` (visible top) -- convert to
-		-- absolute buffer lines or flash's from/to filter drops
-		-- everything once the window is scrolled.
-		local line, col, end_col, len = m[1] + from, m[2], m[3], m[4]
-		if len > 0 then
-			matches[#matches + 1] = {
-				win = win,
-				pos = Pos({ line, col }),
-				end_pos = Pos({ line, end_col }),
-			}
-			local key = string.format("%d:%d:%d", line, col, end_col)
-			keep[key] = true
-			M.predictions[win][key] = preds[i] or ""
+		for i, m in ipairs(found) do
+			-- Rust line indices are 0-based into the `lines` slice, which
+			-- starts at buffer line `from` (visible top) -- convert to
+			-- absolute buffer lines or flash's from/to filter drops
+			-- everything once the window is scrolled.
+			local line, col, end_col, len = m[1] + from, m[2], m[3], m[4]
+			if len > 0 then
+				matches[#matches + 1] = {
+					win = win,
+					pos = Pos({ line, col }),
+					end_pos = Pos({ line, end_col }),
+				}
+				local key = string.format("%d:%d:%d", line, col, end_col)
+				keep[key] = true
+				M.predictions[win][key] = preds[i] or ""
+			end
 		end
-	end
 		-- drop this window's stale predictions only: other windows are
 		-- filled by their own matcher invocation
 		for k in pairs(M.predictions[win]) do

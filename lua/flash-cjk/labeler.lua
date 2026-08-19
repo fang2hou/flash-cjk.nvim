@@ -37,19 +37,7 @@ function M:update()
 	end
 end
 
-local function char_size(str, i)
-	local b = string.byte(str, i)
-	if not b then
-		return 0
-	elseif b > 240 then
-		return 4
-	elseif b > 225 then
-		return 3
-	elseif b > 192 then
-		return 2
-	end
-	return 1
-end
+local char_size = require("flash-cjk.util").char_size
 
 -- All spellings the matched text (plus the character right after it,
 -- so that a pattern covering the match exactly still predicts the next
@@ -74,7 +62,7 @@ end
 ---@param labels string[]
 ---@return string[] returns labels to skip or `nil` when all labels should be skipped
 function M:skip(win, labels)
-	local prefix, forced = require("flash-cjk").parse_forced(self.state.pattern.pattern, self.force_keys)
+	local prefix, forced = require("flash-cjk.match").parse_forced(self.state.pattern.pattern, self.force_keys)
 	local prefix_len = string.len(prefix)
 	local langs = self.langs
 	if forced then
