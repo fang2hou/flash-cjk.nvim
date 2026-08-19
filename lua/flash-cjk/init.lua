@@ -102,11 +102,6 @@ end
 -- @field[opt] opts.en boolean Literal ASCII letter matching.
 -- @field[opt] opts.alpha_mixing boolean Allow mixing literal letters into language chains.
 -- @field opts.force_keys table Language-lock keys, e.g. { cn = "<C-c>" }; false disables one.
--- @field opts.char_map table Char map for flypy.
--- @field[opt] opts.char_map.comma table Override the default comma map.
--- @field[opt] opts.char_map.append_comma table Append to the default comma map.
--- @field[opt] opts.char_map.append_char1 table Append to the default char1patterns map.
--- @field[opt] opts.char_map.append_char2 table Append to the default char2patterns map.
 function M.setup(opts)
 	opts = opts or {}
 	local dirty = false
@@ -123,7 +118,6 @@ function M.setup(opts)
 		end
 	end
 	if dirty then
-		match.reset_comma_cache()
 		M.mix_mode = M.make_mix_mode(config.lang_flags())
 	end
 	if opts.force_keys then
@@ -133,56 +127,6 @@ function M.setup(opts)
 			end
 		end
 	end
-	if not opts.char_map then
-		return
-	end
-	local flypy = require("flash-cjk.flypy")
-	local to_escape = "\\^$*+?.%|[]()"
-	if opts.char_map.comma then
-		for k, v in pairs(opts.char_map.comma) do
-			if #k ~= 1 then
-				error("comma key must be a single character")
-			else
-				v = vim.fn.escape(v, to_escape)
-				flypy.comma[k] = "[" .. v .. "]"
-			end
-		end
-	end
-	if opts.char_map.append_comma then
-		for k, v in pairs(opts.char_map.append_comma) do
-			if #k ~= 1 then
-				error("append_comma key must be a single character")
-			else
-				local chars = flypy.comma[k] or ""
-				chars = string.sub(chars, 2, -2) .. vim.fn.escape(v, to_escape)
-				flypy.comma[k] = "[" .. chars .. "]"
-			end
-		end
-	end
-	if opts.char_map.append_char1 then
-		for k, v in pairs(opts.char_map.append_char1) do
-			if #k ~= 1 then
-				error("append_char1 key must be a single character")
-			else
-				local chars = flypy.char1patterns[k] or ""
-				chars = string.sub(chars, 2, -2) .. vim.fn.escape(v, to_escape)
-				flypy.char1patterns[k] = "[" .. chars .. "]"
-			end
-		end
-	end
-	if opts.char_map.append_char2 then
-		for k, v in pairs(opts.char_map.append_char2) do
-			if #k ~= 2 then
-				error("append_char2 key must be two characters")
-			else
-				local chars = flypy.char2patterns[k] or ""
-				chars = string.sub(chars, 2, -2) .. vim.fn.escape(v, to_escape)
-				flypy.char2patterns[k] = "[" .. chars .. "]"
-			end
-		end
-	end
-	-- char_map edits flypy.comma in place: drop cached merged maps
-	match.reset_comma_cache()
 end
 
 return M

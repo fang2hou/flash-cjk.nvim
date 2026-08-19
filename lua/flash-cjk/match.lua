@@ -32,12 +32,8 @@ local MAX_SEGMENTATIONS = 600
 -- punctuation
 
 local comma_cache = {} ---@type table<string, table<string,string>>
-
--- Drops the cached merged punctuation maps; setup() calls this after
--- data or language changes that the cache key cannot express.
-function M.reset_comma_cache()
-	comma_cache = {}
-end
+-- The cache key encodes the cn/jp flags, the tables' only inputs, so
+-- entries self-invalidate when setup() changes the enabled languages.
 
 -- Effective punctuation map: each enabled language contributes its own
 local function merge_class(a, b)
