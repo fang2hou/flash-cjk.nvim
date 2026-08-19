@@ -53,7 +53,7 @@ function M.search(pattern, lines, langs)
 			cn = langs.cn and true or false,
 			jp = langs.jp and true or false,
 			ko = langs.ko and true or false,
-			original = langs.original and true or false,
+			en = langs.en and true or false,
 			alpha_mixing = langs.alpha_mixing ~= false,
 		},
 	})

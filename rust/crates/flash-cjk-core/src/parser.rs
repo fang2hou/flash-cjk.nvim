@@ -12,7 +12,7 @@ pub struct Langs {
     pub cn: bool,
     pub jp: bool,
     pub ko: bool,
-    pub original: bool,
+    pub en: bool,
     pub alpha_mixing: bool,
 }
 
@@ -22,7 +22,7 @@ impl Default for Langs {
             cn: true,
             jp: true,
             ko: true,
-            original: true,
+            en: true,
             alpha_mixing: true,
         }
     }
@@ -67,20 +67,20 @@ pub struct Alt {
 pub const MARKER_CN: char = '\u{1}';
 pub const MARKER_JP: char = '\u{2}';
 pub const MARKER_KO: char = '\u{4}';
-pub const MARKER_EO: char = '\u{5}';
+pub const MARKER_EN: char = '\u{5}';
 
 /// Upper bound on interpretations, mirroring MAX_SEGMENTATIONS.
 const MAX_ALTS: usize = 600;
 
 /// Splits a raw pattern (with lock markers) into (clean, lock marker).
 /// The rightmost marker wins. Merging the marker with the base language
-/// flags happens in `compile` (which knows `base.original`).
+/// flags happens in `compile` (which knows `base.en`).
 pub fn parse_forced(pattern: &str) -> (String, Option<char>) {
     let mut best_pos = 0usize;
     let mut best: Option<char> = None;
     let mut clean = String::with_capacity(pattern.len());
     for (pos, c) in pattern.char_indices() {
-        let is_marker = matches!(c, MARKER_CN | MARKER_JP | MARKER_KO | MARKER_EO);
+        let is_marker = matches!(c, MARKER_CN | MARKER_JP | MARKER_KO | MARKER_EN);
         if is_marker {
             if pos >= best_pos {
                 best_pos = pos;
@@ -190,7 +190,7 @@ impl<'a> Compiler<'a> {
         let tail4_at = first.len_utf8() + second.len_utf8() + third.len_utf8();
 
         if first.is_ascii_lowercase() {
-            let alpha_allowed = self.langs.original && (self.langs.alpha_mixing || alpha_ok);
+            let alpha_allowed = self.langs.en && (self.langs.alpha_mixing || alpha_ok);
             if second == '\0' {
                 // last key: alpha / singlepin / jp1 / ko1
                 let f1 = first.to_string();
@@ -405,13 +405,13 @@ impl<'a> Compiler<'a> {
 pub fn compile(pattern: &str, base: Langs) -> Vec<Alt> {
     let (clean, marker) = parse_forced(pattern);
     // mirrors forced_langs in init.lua: the lock turns the other language
-    // matchers off but keeps the base `original` (literal) flag; an eo
+    // matchers off but keeps the base `en` (literal) flag; an en
     // lock forces literal matching on.
     let langs = marker.map_or(base, |m| Langs {
         cn: m == MARKER_CN,
         jp: m == MARKER_JP,
         ko: m == MARKER_KO,
-        original: m == MARKER_EO || base.original,
+        en: m == MARKER_EN || base.en,
         alpha_mixing: base.alpha_mixing,
     });
     let mut compiler = Compiler {

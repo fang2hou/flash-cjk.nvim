@@ -10,7 +10,7 @@ function M.new(state, langs, force_keys)
 	local self
 	self = setmetatable({}, M)
 	self.state = state
-	self.langs = langs or { cn = true, jp = true, ko = true, original = true }
+	self.langs = langs or { cn = true, jp = true, ko = true, en = true }
 	self.force_keys = force_keys
 	self.used = {}
 	self:reset()

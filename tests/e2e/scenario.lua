@@ -31,7 +31,7 @@ ok(type(fc.jump) == "function" and type(fc.remote) == "function", "lazy load: fl
 local shim_ok, shim = pcall(require, "flash-zh")
 ok(shim_ok and shim == fc, "shim: flash-zh forwards to flash-cjk through lazy rtp")
 
-ok(fc.config.langs.cn and fc.config.langs.jp and fc.config.langs.ko, "opts: langs merged from lazy spec")
+ok(fc.config.cn == "xiaohe" and fc.config.jp == "roma" and fc.config.ko == "roma", "opts: lazy opts normalized into schemes")
 
 local rust = require("flash-cjk.rust")
 local no_rust = os.getenv("FLASH_CJK_E2E_NO_RUST") == "1"
@@ -52,9 +52,9 @@ local function jump_capture(opts)
   opts = opts or {}
   opts.labeler = function(_, state)
     last_state = state
-    require("flash-cjk.labeler").new(state, fc.config.langs, keys):update()
+    require("flash-cjk.labeler").new(state, fc.resolve_langs(nil), keys):update()
   end
-  return fc.jump(opts)
+  return fc.jump(nil, opts)
 end
 
 local function run(prefed)
@@ -151,7 +151,7 @@ end
 -- rust path silently return zero matches with no vim-regex fallback
 if not no_rust then
   do
-    local matcher = rust.matcher({ cn = true, jp = true, ko = true, original = true })
+    local matcher = rust.matcher({ cn = true, jp = true, ko = true, en = true })
     local fake = {
       pattern = {
         pattern = "ti",
