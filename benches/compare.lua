@@ -1,13 +1,17 @@
--- Benchmark: vim-regex matcher path vs native Rust matcher path.
+-- Benchmark: vim-regex matcher path vs native Rust matcher paths.
 --
--- Measures the honest per-keystroke cost of both implementations across
--- the full language-combination matrix — every single, pair, triple and
--- the quad drawn from { zhcn, ja, ko, en } (15 categories):
---   * vim path  : make_mix_mode(langs)(pattern)  -> regex build +
---                 vim.regex compile + match_str scan over every line
---   * rust path : require("flash-cjk.rust").search(pattern, lines, langs)
---                 (spawns the real flash-cjk-search binary per call,
---                 exactly like a live keystroke does)
+-- Measures the honest per-keystroke cost of three implementations
+-- across the full language-combination matrix — every single, pair,
+-- triple and the quad drawn from { zhcn, ja, ko, en } (15 categories):
+--   * vim path     : make_mix_mode(langs)(pattern)  -> regex build +
+--                    vim.regex compile + match_str scan over every line
+--   * rust spawn   : require("flash-cjk.rust").search_spawn(...):
+--                    spawns the flash-cjk-search binary per call,
+--                    exactly like a live keystroke on the fallback
+--                    transport (process spawn + table startup each time)
+--   * rust server  : require("flash-cjk.rust").search(...): one request
+--                    over the persistent UDS server (warmed up front),
+--                    the transport live keystrokes use
 -- Each category enables ONLY its own languages in the langs flags and
 -- samples window text and keystrokes from those languages' plausible
 -- spellings (the en-only category is pure ASCII words), so singles show
@@ -33,6 +37,22 @@ if not rust.available() then
 			.. "Build it first: cargo build --release --manifest-path rust/Cargo.toml\n"
 	)
 	os.exit(1)
+end
+
+-- warm the persistent server in an isolated runtime dir so the
+-- server series measures the shared transport, not a user instance
+local server_mode = false
+if vim.fn.has("unix") == 1 then
+	vim.env.XDG_RUNTIME_DIR = (vim.env.TMPDIR or "/tmp") .. "/fcjk-bench-" .. vim.uv.os_getpid()
+	rust.reset_server_for_test()
+	rust.warmup()
+	server_mode = vim.wait(4000, function()
+		return rust.server_ready()
+	end, 10)
+	if not server_mode then
+		io.stderr:write("ERROR: server transport failed to warm up; benchmark would mix transports\n")
+		os.exit(1)
+	end
 end
 
 -- ---------------------------------------------------------------------------
@@ -255,9 +275,19 @@ end
 
 local function rust_path(pattern, lines, langs)
 	local t0 = vim.uv.hrtime()
-	local resp = rust.search(pattern, lines, langs)
+	local resp = rust.search_spawn(pattern, lines, langs)
 	local dt = (vim.uv.hrtime() - t0) / 1e6
 	assert(resp and type(resp.matches) == "table", "rust search failed")
+	return dt
+end
+
+-- the persistent-server transport (the live keystroke path): one
+-- request over the warmed UDS session's per-request connection
+local function rust_server_path(pattern, lines, langs)
+	local t0 = vim.uv.hrtime()
+	local resp = rust.search(pattern, lines, langs)
+	local dt = (vim.uv.hrtime() - t0) / 1e6
+	assert(resp and type(resp.matches) == "table", "rust server search failed")
 	return dt
 end
 
@@ -324,8 +354,9 @@ do
 	end
 end
 -- floor costs, measured once up front: they explain the shape of the
--- rust curve (spawn is cheap; the binary's own startup dominates)
-local spawn_ms, startup_ms = 0, 0
+-- rust curves (the spawn transport pays process creation + table
+-- startup per call; the server transport pays only a UDS round trip)
+local spawn_ms, startup_ms, uds_ms, server_rss_kb = 0, 0, 0, 0
 do
 	local bin = vim.fn.exepath("rust/target/release/flash-cjk-search")
 	local function med(fn, n)
@@ -349,6 +380,19 @@ do
 	startup_ms = med(function()
 		vim.system({ bin }, { stdin = tiny }):wait()
 	end, 5)
+	if server_mode then
+		-- UDS round-trip floor: minimal request over the warm server
+		uds_ms = med(function()
+			rust.search("a", { "a" }, { zhcn = true, ja = true, ko = true, en = true })
+		end, 200)
+		-- resident memory of the serving process
+		local addr = rust.server_addr()
+		local pid = vim.fn.trim(vim.fn.system(("pgrep -f 'flash-cjk-search serve --socket %s'"):format(addr)) or "")
+		if pid ~= "" then
+			local rss = vim.fn.trim(vim.fn.system(("ps -o rss= -p %s"):format(pid)) or "")
+			server_rss_kb = tonumber(rss) or 0
+		end
+	end
 end
 
 print(("generating %d cases across %d categories..."):format(CASES_TOTAL, #CATEGORIES))
@@ -358,28 +402,23 @@ local results = {
 		os = ("%s %s (%s)"):format(uname.sysname or "?", uname.release or "?", uname.machine or "?"),
 		cpu = cpu ~= "" and cpu or (uname.machine or "?"),
 		neovim = nvim_ver,
-		seed = 42,
-		cases = CASES_TOTAL,
-		lines_per_case = "20-60",
-		matrix = ("15 combinations (4 singles, 6 pairs, 4 triples, 1 quad) x %d cases each"):format(
-			CASES_PER_CATEGORY
-		),
-		warmup_passes = WARMUP_PASSES,
-		measured_passes = MEASURED_PASSES,
-		statistic = "median of 3 passes, per case",
 		process_spawn_ms = round(spawn_ms),
 		binary_startup_ms = round(startup_ms),
-		note = "rust path includes the per-keystroke process spawn (vim.system + JSON), same as live usage",
+		uds_roundtrip_ms = round(uds_ms),
+		server_rss_kb = server_rss_kb,
+		transport = server_mode and "server (UDS) for the rust series; rust_spawn_ms keeps the per-keystroke spawn transport"
+			or "spawn (no UDS on this platform)",
+		note = "rust_spawn_ms includes the per-keystroke process spawn (vim.system + JSON), same as the fallback transport; rust_ms (server) is one UDS request to the persistent server",
 	},
 	categories = {},
 }
 
-local all_vim, all_rust, all_speedup = {}, {}, {}
+local all_vim, all_rust_spawn, all_rust_server, all_speedup = {}, {}, {}, {}
 local done = 0
 local t_start = os.time()
 
 for _, cat in ipairs(CATEGORIES) do
-	local cat_vim, cat_rust, cat_speedup = {}, {}, {}
+	local cat_vim, cat_rust_spawn, cat_rust_server, cat_speedup = {}, {}, {}, {}
 	local vim_failed = 0
 	for _ = 1, cat.cases do
 		local case = gen_case(cat)
@@ -390,24 +429,28 @@ for _, cat in ipairs(CATEGORIES) do
 		-- warmup
 		vim_path(mode, case.pattern, case.lines)
 		rust_path(case.pattern, case.lines, cat.flags)
+		rust_server_path(case.pattern, case.lines, cat.flags)
 
 		-- measured passes, alternating implementations to spread any
 		-- thermal / scheduler drift evenly between them; a vim regex
 		-- that cannot compile (E872) has no timing and is counted
-		local vtimes, rtimes = {}, {}
+		local vtimes, rtimes, stimes = {}, {}, {}
 		for _ = 1, MEASURED_PASSES do
 			local vt = vim_path(mode, case.pattern, case.lines)
 			if vt then
 				vtimes[#vtimes + 1] = vt
 			end
 			rtimes[#rtimes + 1] = rust_path(case.pattern, case.lines, cat.flags)
+			stimes[#stimes + 1] = rust_server_path(case.pattern, case.lines, cat.flags)
 		end
 		local rm = median3(rtimes)
-		cat_rust[#cat_rust + 1] = rm
+		local sm = median3(stimes)
+		cat_rust_spawn[#cat_rust_spawn + 1] = rm
+		cat_rust_server[#cat_rust_server + 1] = sm
 		if #vtimes == MEASURED_PASSES then
 			local vm = median3(vtimes)
 			cat_vim[#cat_vim + 1] = vm
-			cat_speedup[#cat_speedup + 1] = vm / rm
+			cat_speedup[#cat_speedup + 1] = vm / sm
 		else
 			vim_failed = vim_failed + 1
 		end
@@ -417,7 +460,7 @@ for _, cat in ipairs(CATEGORIES) do
 			print(("  %d/%d cases (%s)"):format(done, CASES_TOTAL, cat.id))
 		end
 	end
-	local vs, rs = stats(cat_vim), stats(cat_rust)
+	local vs, rs, ss = stats(cat_vim), stats(cat_rust_spawn), stats(cat_rust_server)
 	local sp = 0
 	for _, s in ipairs(cat_speedup) do
 		sp = sp + s
@@ -427,24 +470,28 @@ for _, cat in ipairs(CATEGORIES) do
 		cases = cat.cases,
 		languages = cat.langs,
 		vim_ms = { mean = round(vs.mean), p50 = round(vs.p50), p95 = round(vs.p95) },
-		rust_ms = { mean = round(rs.mean), p50 = round(rs.p50), p95 = round(rs.p95) },
+		rust_spawn_ms = { mean = round(rs.mean), p50 = round(rs.p50), p95 = round(rs.p95) },
+		rust_server_ms = { mean = round(ss.mean), p50 = round(ss.p50), p95 = round(ss.p95) },
 		speedup_mean = round(sp),
-		mean_ratio = round(vs.mean / rs.mean),
-		p95_ratio = round(vs.p95 / rs.p95),
+		mean_ratio = round(vs.mean / ss.mean),
+		p95_ratio = round(vs.p95 / ss.p95),
 		vim_regex_failures = vim_failed,
 	}
 	for _, v in ipairs(cat_vim) do
 		all_vim[#all_vim + 1] = v
 	end
-	for _, v in ipairs(cat_rust) do
-		all_rust[#all_rust + 1] = v
+	for _, v in ipairs(cat_rust_spawn) do
+		all_rust_spawn[#all_rust_spawn + 1] = v
+	end
+	for _, v in ipairs(cat_rust_server) do
+		all_rust_server[#all_rust_server + 1] = v
 	end
 	for _, v in ipairs(cat_speedup) do
 		all_speedup[#all_speedup + 1] = v
 	end
 end
 
-local vs, rs = stats(all_vim), stats(all_rust)
+local vs, rs, ss = stats(all_vim), stats(all_rust_spawn), stats(all_rust_server)
 local sp = 0
 for _, s in ipairs(all_speedup) do
 	sp = sp + s
@@ -457,10 +504,11 @@ end
 results.overall = {
 	cases = CASES_TOTAL,
 	vim_ms = { mean = round(vs.mean), p50 = round(vs.p50), p95 = round(vs.p95) },
-	rust_ms = { mean = round(rs.mean), p50 = round(rs.p50), p95 = round(rs.p95) },
+	rust_spawn_ms = { mean = round(rs.mean), p50 = round(rs.p50), p95 = round(rs.p95) },
+	rust_server_ms = { mean = round(ss.mean), p50 = round(ss.p50), p95 = round(ss.p95) },
 	speedup_mean = round(sp),
-	mean_ratio = round(vs.mean / rs.mean),
-	p95_ratio = round(vs.p95 / rs.p95),
+	mean_ratio = round(vs.mean / ss.mean),
+	p95_ratio = round(vs.p95 / ss.p95),
 	vim_regex_failures = total_vim_failed,
 	vim_regex_failures_note = "cases whose alternation exceeded vim's NFA capture-group limit (E872); the Rust path matched them all",
 }
@@ -474,25 +522,36 @@ out:write(encoded, "\n")
 out:close()
 
 print(("\nwrote benches/results.json (%d s elapsed)"):format(os.time() - t_start))
-print(string.format("%-16s %10s %10s %9s", "category", "vim mean", "rust mean", "ratio"))
+print(string.format("%-16s %10s %12s %12s %9s", "category", "vim mean", "spawn mean", "server mean", "ratio"))
 for _, cat in ipairs(CATEGORIES) do
 	local r = results.categories[cat.id]
 	print(
 		string.format(
-			"%-16s %9.2fms %9.2fms %8s",
+			"%-16s %9.2fms %11.2fms %11.2fms %8s",
 			cat.id,
 			r.vim_ms.mean,
-			r.rust_ms.mean,
+			r.rust_spawn_ms.mean,
+			r.rust_server_ms.mean,
 			fmt_ratio(r.mean_ratio)
 		)
 	)
 end
 print(
 	string.format(
-		"%-16s %9.2fms %9.2fms %8s",
+		"%-16s %9.2fms %11.2fms %11.2fms %8s",
 		"overall",
 		results.overall.vim_ms.mean,
-		results.overall.rust_ms.mean,
+		results.overall.rust_spawn_ms.mean,
+		results.overall.rust_server_ms.mean,
 		fmt_ratio(results.overall.mean_ratio)
+	)
+)
+print(
+	string.format(
+		"floors: spawn %.2fms + startup %.2fms | uds round trip %.3fms | server rss %.0f kb",
+		spawn_ms,
+		startup_ms,
+		uds_ms,
+		server_rss_kb
 	)
 )

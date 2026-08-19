@@ -455,6 +455,71 @@ do
 	end
 end
 
+-- persistent-server transport: the UDS path must return exactly what
+-- the spawn path returns, and transport failures (timeout, crashed
+-- server) must degrade to the spawn path without erroring
+do
+	local rust = require("flash-cjk.rust")
+	if rust.available() and vim.fn.has("unix") == 1 then
+		local saved_rt = vim.env.XDG_RUNTIME_DIR
+		vim.env.XDG_RUNTIME_DIR = (vim.env.TMPDIR or "/tmp") .. "/fcjk-run-" .. vim.uv.os_getpid()
+		rust.reset_server_for_test()
+		rust.warmup()
+		local ready = vim.wait(4000, function()
+			return rust.server_ready()
+		end, 10)
+		ok(ready, "server transport: warmup opened a session")
+		if ready then
+			local lines_t = { "日本語テスト ちちはち 梯子 안녕", "hello 日本 nice" }
+			local langs_t = { zhcn = true, ja = true, ko = true, en = true }
+			local same = true
+			for _, p in ipairs({ "ti", "ni", "sha", "dkss", "ti\x02", "n", "han" }) do
+				local a = rust.search(p, lines_t, langs_t)
+				local b = rust.search_spawn(p, lines_t, langs_t)
+				if vim.inspect(a) ~= vim.inspect(b) then
+					same = false
+				end
+			end
+			ok(same, "server transport: responses identical to spawn transport (spans + pred_langs)")
+
+			-- a per-request budget that cannot be met must fall back to
+			-- the spawn transport silently for that keystroke
+			rust.set_server_timeout_for_test(1)
+			local fell_back_ok = true
+			for _, p in ipairs({ "ti", "ni" }) do
+				local r = rust.search(p, lines_t, langs_t)
+				if not r or type(r.matches) ~= "table" then
+					fell_back_ok = false
+				end
+			end
+			rust.set_server_timeout_for_test(200)
+			ok(fell_back_ok, "server transport: timeout falls back to spawn without error")
+
+			-- crash recovery: kill -9 the server; the next keystroke must
+			-- fall back and a replacement server must come up
+			local addr = rust.server_addr()
+			local srv = vim.fn.trim(vim.fn.system(("pgrep -f 'flash-cjk-search serve --socket %s'"):format(addr)) or "")
+			if srv ~= "" then
+				vim.fn.system(("kill -9 %s"):format(srv))
+			end
+			vim.wait(300, function()
+				return false
+			end) -- let the exit land
+			local r2 = rust.search("ti", lines_t, langs_t)
+			local revived = vim.wait(4000, function()
+				return rust.server_ready()
+			end, 10)
+			local r3 = rust.search("ti", lines_t, langs_t)
+			ok(
+				r2 ~= nil and revived and r3 ~= nil and #r3.matches > 0,
+				"server transport: crash -> spawn fallback -> revive"
+			)
+		end
+		vim.env.XDG_RUNTIME_DIR = saved_rt
+		rust.reset_server_for_test()
+	end
+end
+
 -- public API surface: remote() entry (shared build_opts incl. rust
 -- matcher + patches)
 do

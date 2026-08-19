@@ -39,7 +39,8 @@ FAINT = "#8c959f"
 BORDER = "#d1d9e0"
 TRACK = "#eff2f5"
 VIM_COLOR = "#bf8700"  # muted amber — the pure-Lua vim-regex path
-RUST_COLOR = "#1a7f37"  # green — the native Rust matcher
+RUST_COLOR = "#1a7f37"  # green — the native Rust matcher over the persistent server
+SPAWN_COLOR = "#8c959f"  # gray — the per-keystroke spawn transport (before)
 PANEL_BG = "#f6f8fa"
 
 LANG_NAMES = {
@@ -216,10 +217,10 @@ def main() -> None:
 
     # --------------------------------------------------------- summary panel
     panel_rows = [
-        ("mean", overall["vim_ms"]["mean"], overall["rust_ms"]["mean"],
+        ("mean", overall["vim_ms"]["mean"], overall["rust_server_ms"]["mean"],
          overall["mean_ratio"]),
-        ("p50", overall["vim_ms"]["p50"], overall["rust_ms"]["p50"], None),
-        ("p95", overall["vim_ms"]["p95"], overall["rust_ms"]["p95"],
+        ("p50", overall["vim_ms"]["p50"], overall["rust_server_ms"]["p50"], None),
+        ("p95", overall["vim_ms"]["p95"], overall["rust_server_ms"]["p95"],
          overall["p95_ratio"]),
     ]
     py = 26
@@ -260,7 +261,7 @@ def main() -> None:
     parts.append(rounded(LEFT, ly - 9, 12, 12, 3, VIM_COLOR))
     parts.append(text(LEFT + 18, ly, "vim-regex (pure Lua path)", 10.5, MUTED))
     parts.append(rounded(LEFT + 172, ly - 9, 12, 12, 3, RUST_COLOR))
-    parts.append(text(LEFT + 190, ly, "Rust binary (process spawn included)",
+    parts.append(text(LEFT + 190, ly, "Rust over the persistent server (UDS)",
                       10.5, MUTED))
     parts.append(
         text(RIGHT, ly,
@@ -289,7 +290,7 @@ def main() -> None:
 
         for _, cat in cats:
             vim_ms = cat["vim_ms"]["mean"]
-            rust_ms = cat["rust_ms"]["mean"]
+            rust_ms = cat["rust_server_ms"]["mean"]
             parts.append(text(LEFT, y, cat_label(cat), 12.5, INK, 700))
             parts.append(
                 text(RIGHT, y, fmt_x(cat["mean_ratio"]), 11, MUTED, 700,
@@ -299,7 +300,7 @@ def main() -> None:
             ceiling = max(vim_ms, rust_ms) * 1.06
             for ms, color, name in (
                 (vim_ms, VIM_COLOR, "vim-regex"),
-                (rust_ms, RUST_COLOR, "Rust"),
+                (rust_ms, RUST_COLOR, "Rust (server)"),
             ):
                 parts.append(rounded(LEFT, y, BODY, 14, 7, TRACK))
                 bw = max(6.0, BODY * ms / ceiling)
@@ -314,6 +315,55 @@ def main() -> None:
                 y += 20
             y += 7
 
+    # ------------------------------------------------- spawn -> server panel
+    # the headline change of the server transport: the per-keystroke
+    # process floor is gone. Three metric groups, spawn vs server bars
+    # on one shared scale per group.
+    y += 18
+    parts.append(hline(LEFT, RIGHT, y, BORDER))
+    y += 26
+    parts.append(text(LEFT, y, "Process overhead eliminated: spawn vs server",
+                      15, INK, 700))
+    parts.append(
+        text(RIGHT, y, "same 1,050 cases · per-keystroke cost of the Rust path",
+             10, FAINT, 400, "end")
+    )
+    y += 14
+    groups_panel = [
+        ("mean", overall["rust_spawn_ms"]["mean"], overall["rust_server_ms"]["mean"]),
+        ("p50", overall["rust_spawn_ms"]["p50"], overall["rust_server_ms"]["p50"]),
+        ("p95", overall["rust_spawn_ms"]["p95"], overall["rust_server_ms"]["p95"]),
+    ]
+    col_w = BODY / 3
+    for i, (name, spawn_ms, server_ms) in enumerate(groups_panel):
+        cx = LEFT + i * col_w + col_w / 2
+        parts.append(text(LEFT + i * col_w + col_w / 2, y, name, 12, INK, 700,
+                          "middle"))
+        ceiling = max(spawn_ms, server_ms) * 1.06
+        bar_area = col_w - 90
+        bx = LEFT + i * col_w + 45
+        bw_sp = max(6.0, bar_area * spawn_ms / ceiling)
+        bw_sv = max(6.0, bar_area * server_ms / ceiling)
+        parts.append(rounded(bx, y + 12, bar_area, 13, 6, TRACK))
+        parts.append(rounded(bx, y + 12, bw_sp, 13, 6, SPAWN_COLOR))
+        parts.append(text(bx + bar_area + 8, y + 23,
+                          f"spawn {fmt_ms(spawn_ms)} ms", 10, MUTED, 700))
+        parts.append(rounded(bx, y + 33, bar_area, 13, 6, TRACK))
+        parts.append(rounded(bx, y + 33, bw_sv, 13, 6, RUST_COLOR))
+        parts.append(text(bx + bar_area + 8, y + 44,
+                          f"server {fmt_ms(server_ms)} ms", 10, RUST_COLOR, 700))
+    y += 62
+    spawn_drop = (1 - overall["rust_server_ms"]["mean"]
+                  / overall["rust_spawn_ms"]["mean"]) * 100
+    parts.append(
+        text(LEFT, y,
+             f"mean {fmt_x(overall['rust_spawn_ms']['mean'] / overall['rust_server_ms']['mean'])} faster · "
+             f"{spawn_drop:.0f}% of the spawn cost was process creation + "
+             "data-table startup, paid once at server start instead",
+             10, MUTED)
+    )
+    y += 16
+
     # ---------------------------------------------------------------- footnote
     fy = y + 10
     parts.append(hline(LEFT, RIGHT, fy, BORDER))
@@ -325,13 +375,14 @@ def main() -> None:
         "20-60 lines per window,",
         "characters sampled from the plugin's own data tables · patterns "
         "of 1-6 plausible keystrokes · deterministic seed.",
-        "Per case: warmup pass, then the median of 3 measured passes. "
-        "Rust timings include the per-keystroke process spawn "
-        "(vim.system + JSON round-trip), exactly as in live use.",
-        f"Short prefixes favor the vim-regex path (overall p50 "
-        f"{fmt_ms(overall['vim_ms']['p50'])} ms vs "
-        f"{fmt_ms(overall['rust_ms']['p50'])} ms); richer mixes grow the "
-        "vim-regex tail while the Rust path stays flat.",
+        "Per case: warmup pass, then the median of 3 passes. Rust rides "
+        "the persistent server (one UDS request per keystroke).",
+        "The spawn panel keeps the per-keystroke process transport "
+        "(vim.system + JSON), the fallback path.",
+        f"Short prefixes favor vim-regex on the lightest singles "
+        f"(p50 {fmt_ms(overall['vim_ms']['p50'])} vs "
+        f"{fmt_ms(overall['rust_server_ms']['p50'])} ms); richer mixes "
+        "grow the vim-regex tail while the server path stays flat.",
     ]
     if failures:
         foot.append(
@@ -341,8 +392,8 @@ def main() -> None:
         )
     foot.append(
         f"{meta['cpu']} · {meta['os']} · Neovim {meta['neovim']} · "
-        f"spawn {fmt_ms(meta.get('process_spawn_ms', 0))} ms + binary "
-        f"startup {fmt_ms(meta.get('binary_startup_ms', 0))} ms floor · "
+        f"UDS floor {fmt_ms(meta.get('uds_roundtrip_ms', 0))} ms · "
+        f"server RSS {meta.get('server_rss_kb', 0) / 1024:.1f} MB · "
         f"{meta['date']} · rerun: nvim -l benches/compare.lua"
     )
     # footnote lines must fit the body width; ~0.52 em average advance
