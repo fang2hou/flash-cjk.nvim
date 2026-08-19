@@ -25,10 +25,10 @@ input letter.
 - `patches.lua` — flash.nvim patches (C-c dispatch, prompt lock display)
 - `util.lua` — shared helpers
 - `labeler.lua` — flash labeler: next-letter prediction (from spellings or the Rust matcher's per-match predictions), skip-set, monotonic label pool
-- `rust.lua` — bridge to the native binary: per-keystroke spawn, JSON protocol, fallback circuit breaker to the vim-regex path
+- `rust.lua` — bridge to the native matcher: persistent UDS server transport (Unix, zero config), per-keystroke spawn fallback, JSON protocol, circuit breaker to the vim-regex path
 - data modules (`zhcnData.lua`, `jaData.lua`, `zhcnRev.lua`, `ja.lua`, `ko.lua`) — char-class tables and per-language pattern helpers; `jaData.lua` is generated
 - `flash-cjk-core` (Rust lib) — charset, parser, DP matcher, prediction; mirrors Lua semantics
-- `flash-cjk-search` (Rust binary) — stdin/stdout JSON front for the core
+- `flash-cjk-search` (Rust binary) — JSON front for the core: stdin/stdout one-shot mode and a `serve` UDS server mode with connection-based liveness (a client is registered while its session connection is open; the last one out takes the server with it)
 - `tests/` — behavior suite, strict rust↔vim cross-validation and fuzz, LazyVim-style e2e
 - `scripts/` — data generators (Unihan → lua, lua → rust)
 
@@ -70,5 +70,7 @@ What must remain true about the architecture:
 
 Significant decisions are recorded as ADRs in [docs/adr/](./docs/adr/),
 following the guidelines repository's `adr.template.md`. Start with
-[ADR-0001: native Rust matcher](./docs/adr/0001-rust-native-matcher.md).
+[ADR-0001: native Rust matcher](./docs/adr/0001-rust-native-matcher.md);
+[ADR-0003](./docs/adr/0003-persistent-matcher-server.md) records the
+persistent-server lifecycle.
 When a request conflicts with an ADR, do not silently violate it — raise it.
