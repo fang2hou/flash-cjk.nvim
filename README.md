@@ -22,6 +22,10 @@ return {{
     "fang2hou/flash-cjk.nvim",
     event = "VeryLazy",
     dependencies = "folke/flash.nvim",
+    -- 自动构建 Rust 加速器(见下文"Rust 加速"):lazy.nvim 会在安装/更新时
+    -- 在插件根目录执行该命令;没有 cargo 时构建会失败,插件照常工作(自动
+    -- 回退到 vim 正则路径),只想消除构建报错可删掉这一行
+    build = "cargo build --release --manifest-path=rust/Cargo.toml",
     keys = {{
         "s",
         mode = {"n", "x", "o"},
@@ -153,6 +157,8 @@ macOS 文件系统存储的韩文文件名是 NFD 分解形式(jamo 序列,如 `
 
 内置一个 Rust 原生匹配器,构建一次后自动启用,长输入每键延迟从 55-80ms 降到 1-3ms(对比 vim 正则路径 3.8x-76x):
 
+安装时在 lazy.nvim spec 里加了 `build = "cargo build --release --manifest-path=rust/Cargo.toml"` 的话,lazy 会在安装/更新时自动构建,无需手动操作;手动构建:
+
 ```sh
 cd rust && cargo build --release
 ```
@@ -164,6 +170,8 @@ cd rust && cargo build --release
 ```sh
 nvim --headless +"lua dofile('tests/run.lua')" +qa!        # 功能 + 集成 + 端到端
 nvim --headless -l tests/cross_validate_rust.lua            # Rust 与 vim 正则严格交叉验证
+tests/e2e/run.sh                                             # LazyVim 式 repro 端到端:lazy.nvim 加载
+                                                            # + 自动构建 + Rust/vim 双路径奇偶校验
 cd rust && cargo test && cargo clippy && cargo fmt --check  # Rust 单元 + benchmark
 ```
 
