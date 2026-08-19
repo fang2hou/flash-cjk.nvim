@@ -39,7 +39,7 @@ return {{
         "s",
         mode = {"n", "x", "o"},
         function()
-            require("flash-cjk").jump({})
+            require("flash-cjk").jump()
         end,
         desc = "Flash between Chinese/Japanese/Korean"
     }}
@@ -83,31 +83,32 @@ require("flash-cjk").setup({
         cn = "<C-c>",
         jp = "<C-j>",
         ko = "<C-k>",
-        eo = "<C-e>",
+        en = "<C-e>",
     },
 })
 ```
 
 ### 语言开关
 
-每个匹配器都可独立开关——全局生效，或只作用于某次跳转：
+每个匹配器都可独立开关——全局经 setup 设置，或通过语言代码数组只作用于某次跳转：
 
 ```lua
 require("flash-cjk").setup({
-    langs = {
-        cn = true,       -- 中文拼音（小鹤双拼 + 首字母）
-        jp = true,       -- 日语罗马音（汉字读音 + 假名）
-        ko = true,       -- 韩语（罗马字 + 两拼（두벌식）键位）
-        original = true, -- ASCII 字面字母（纯 flash.nvim 行为）
-    },
+    cn = "xiaohe",   -- 中文拼音；true / false，或方案名
+    jp = "roma",     -- 日语罗马音（汉字读音 + 假名）
+    ko = "roma",     -- 韩语（罗马字 + 两拼（두벌식）键位）
+    en = true,       -- ASCII 字面字母（纯 flash.nvim 行为）
+    alpha_mixing = true,
 })
 
-require("flash-cjk").jump({ langs = { cn = false } })  -- 本次跳转：不匹配中文
+require("flash-cjk").jump({ "jp", "ko", "en" })  -- 本次跳转：不匹配中文
 ```
+
+`cn`/`jp`/`ko` 接受 `true`（默认方案）、`false`（关闭）或方案名字符串——中文为 `"xiaohe"`，日语/韩语为 `"roma"`（目前仅有的方案，今后可扩展）。不带数组的 `jump()` 使用 setup 启用集；给定数组即完整决定该次跳转的启用集（`"kr"` 是 `"ko"` 的别名），并优先于 setup 开关。第二个参数用于透传 flash 选项：`jump(nil, { force_keys = { cn = "<C-d>" } })`。
 
 单语言用户只需保留一个开关。注意事项：
 
-- 关闭 `original` 后，数字与大写字母仍按字面匹配；无法解读的输入（如 `n.`）会退化为字面匹配。
+- 关闭 `en` 后，数字与大写字母仍按字面匹配；无法解读的输入（如 `n.`）会退化为字面匹配。
 - 标点跟随语言开关：关闭 `cn` 时，`,` 匹配 、（日文）而非 ，（全角逗号）；`。` 为中日共用，始终匹配；`-` → ー 归属 `jp`。
 - `alpha_mixing = false`（性能选项）：丢弃字面字母与语言片段混排的解释（例如某些继承自 flash-zh 的 `nihao` 变体）；三语长输入下最坏情况延迟降低 40–60%，代价是部分混合链路不可达。
 

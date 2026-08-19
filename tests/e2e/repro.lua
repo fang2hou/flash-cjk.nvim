@@ -60,10 +60,13 @@ require("lazy").setup({
       build = "cargo build --release --manifest-path=rust/Cargo.toml",
       event = "VeryLazy",
       keys = {
-        { "s", mode = { "n", "x", "o" }, function() require("flash-cjk").jump({}) end, desc = "Flash CJK jump" },
+        { "s", mode = { "n", "x", "o" }, function() require("flash-cjk").jump() end, desc = "Flash CJK jump" },
       },
       opts = {
-        langs = { cn = true, jp = true, ko = true, original = true },
+        cn = true,
+        jp = true,
+        ko = true,
+        en = true,
       },
     },
   },

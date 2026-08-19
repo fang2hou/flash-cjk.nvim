@@ -32,7 +32,7 @@ struct LangsSpec {
     #[serde(default = "default_true")]
     ko: bool,
     #[serde(default = "default_true")]
-    original: bool,
+    en: bool,
     #[serde(default = "default_true")]
     alpha_mixing: bool,
 }
@@ -47,7 +47,7 @@ impl From<LangsSpec> for Langs {
             cn: s.cn,
             jp: s.jp,
             ko: s.ko,
-            original: s.original,
+            en: s.en,
             alpha_mixing: s.alpha_mixing,
         }
     }

@@ -2,25 +2,26 @@ local flypy = require("flash-cjk.flypy")
 
 local M = {}
 
--- Default configuration: every matcher is enabled. Each flag can be
--- turned off globally via setup(), or per jump via jump({ langs = ... }):
---   cn       pinyin matching (flypy + first letter)
---   jp       romaji matching (kanji readings + kana)
---   ko       Korean matching (romanization + two-set keys)
---   original literal ASCII letters, i.e. plain flash.nvim behavior
--- langs.alpha_mixing = false additionally drops interpretations that mix
--- literal letters with language segments (e.g. alpha "n" + pinyin "i").
--- The original flash-zh behavior keeps them; turning mixing off trades
--- some mixed-chain reachability (e.g. pinyin "nihao" variants) for
--- lower regex cost on long inputs; measure before enabling.
+-- Default configuration: every language is enabled. Each entry can be
+-- tuned via setup():
+--   cn/jp/ko      true (default scheme), false, or a scheme name
+--                 (see SCHEMES below: cn "xiaohe", jp/ko "roma")
+--   en            literal ASCII letters, i.e. plain flash.nvim behavior
+--   alpha_mixing  false additionally drops interpretations that mix
+--                 literal letters with language segments (e.g. alpha
+--                 "n" + pinyin "i"); the original flash-zh behavior
+--                 keeps them; turning mixing off trades some
+--                 mixed-chain reachability (e.g. pinyin "nihao"
+--                 variants) for lower regex cost on long inputs;
+--                 measure before enabling.
+-- Per-jump overrides take an array of language codes instead, e.g.
+-- jump({ "cn", "en" }) -- see M.resolve_langs.
 M.config = {
-	langs = {
-		cn = true,
-		jp = true,
-		ko = true,
-		original = true,
-		alpha_mixing = true,
-	},
+	cn = "xiaohe",
+	jp = "roma",
+	ko = "roma",
+	en = true,
+	alpha_mixing = true,
 	-- Keys that lock matching to a single language mid-input. The raw
 	-- key bytes are never stored in the pattern; each lock writes a
 	-- buffer-safe internal marker instead (C-j's newline would break
@@ -30,9 +31,48 @@ M.config = {
 		cn = "<C-c>",
 		jp = "<C-j>",
 		ko = "<C-k>",
-		eo = "<C-e>",
+		en = "<C-e>",
 	},
 }
+
+-- Registered matching schemes per language. Each language currently
+-- ships exactly one scheme: the string validates and records the
+-- choice without changing matching behavior (future schemes plug in
+-- here).
+local SCHEMES = {
+	cn = { default = "xiaohe", xiaohe = true },
+	jp = { default = "roma", roma = true },
+	ko = { default = "roma", roma = true },
+}
+
+-- Normalizes a setup value for cn/jp/ko: true -> the default scheme
+-- name, a string -> the validated scheme, false -> false.
+local function normalize_lang(lang, value)
+	if value == true then
+		return SCHEMES[lang].default
+	elseif type(value) == "string" then
+		if SCHEMES[lang][value] then
+			return value
+		end
+		error(("flash-cjk: unknown %s scheme %q"):format(lang, value))
+	elseif value == false then
+		return false
+	end
+	error(("flash-cjk: %s must be a boolean or scheme string"):format(lang))
+end
+
+-- Boolean language flags derived from config, as consumed by the
+-- parser, labeler and the Rust bridge (cn/jp/ko are enabled unless
+-- the scheme is explicitly false).
+local function lang_flags()
+	return {
+		cn = M.config.cn ~= false,
+		jp = M.config.jp ~= false,
+		ko = M.config.ko ~= false,
+		en = M.config.en,
+		alpha_mixing = M.config.alpha_mixing,
+	}
+end
 
 -- Upper bound on the number of pattern interpretations kept per keystroke.
 -- Romaji segments are 1-3 letters long, so the number of possible
@@ -61,8 +101,25 @@ local function get_ko()
 	return ko
 end
 
-local function resolve_langs(opts)
-	return vim.tbl_deep_extend("force", {}, M.config.langs, opts.langs or {})
+---Resolves a jump/remote language array into boolean language flags.
+---nil or {} -> the setup-enabled set; otherwise the array fully
+---decides the enabled set for this jump ("kr" is an alias of "ko";
+---alpha_mixing always comes from config).
+---@param ary string[]? language codes, e.g. { "cn", "en" }
+---@return table langs boolean flags
+function M.resolve_langs(ary)
+	if ary == nil or #ary == 0 then
+		return lang_flags()
+	end
+	local langs = { cn = false, jp = false, ko = false, en = false, alpha_mixing = M.config.alpha_mixing }
+	for _, code in ipairs(ary) do
+		local lang = code == "kr" and "ko" or code
+		if lang ~= "cn" and lang ~= "jp" and lang ~= "ko" and lang ~= "en" then
+			error("flash-cjk: unknown language code: " .. tostring(code))
+		end
+		langs[lang] = true
+	end
+	return langs
 end
 
 -- ------------------------------------------------------------------
@@ -148,11 +205,10 @@ end
 ---@return table
 function M.parser(str, prefix, ctx)
 	prefix = prefix or {}
-	ctx = ctx or {
-		count = 0,
-		langs = M.config.langs,
-		comma = comma_map(M.config.langs),
-	}
+	if ctx == nil then
+		local flags = lang_flags()
+		ctx = { count = 0, langs = flags, comma = comma_map(flags) }
+	end
 	if ctx.count >= MAX_SEGMENTATIONS then
 		return {}
 	end
@@ -169,7 +225,7 @@ function M.parser(str, prefix, ctx)
 	elseif string.match(firstchar, "%l") then
 		local results = {}
 		if secondchar == "" then
-			if ctx.langs.original and (ctx.langs.alpha_mixing ~= false or prefix._alpha ~= false) then
+			if ctx.langs.en and (ctx.langs.alpha_mixing ~= false or prefix._alpha ~= false) then
 				local p1 = M.copy(prefix)
 				p1[#p1 + 1] = { str = firstchar, type = "alpha" }
 				results = M.merge_table(results, M.parser("", p1, ctx))
@@ -253,19 +309,19 @@ function M.parser(str, prefix, ctx)
 					results = M.merge_table(results, M.parser(string.sub(str, 2), pk, ctx))
 				end
 			end
-			if ctx.langs.original and (ctx.langs.alpha_mixing ~= false or prefix._alpha ~= false) then
+			if ctx.langs.en and (ctx.langs.alpha_mixing ~= false or prefix._alpha ~= false) then
 				local p = M.copy(prefix)
 				p[#p + 1] = { str = firstchar, type = "alpha" }
 				results = M.merge_table(results, M.parser(string.sub(str, 2), p, ctx))
 			end
 			return results
-		elseif ctx.langs.original and (ctx.langs.alpha_mixing ~= false or prefix._alpha ~= false)
+		elseif ctx.langs.en and (ctx.langs.alpha_mixing ~= false or prefix._alpha ~= false)
 			and vim.list_contains(chars, secondchar)
 		then
 			prefix[#prefix + 1] = { str = firstchar, type = "alpha" }
 			prefix[#prefix + 1] = { str = secondchar, type = "comma" }
 			return M.parser(string.sub(str, 3), prefix, ctx)
-		elseif ctx.langs.original and (ctx.langs.alpha_mixing ~= false or prefix._alpha ~= false) then
+		elseif ctx.langs.en and (ctx.langs.alpha_mixing ~= false or prefix._alpha ~= false) then
 			prefix[#prefix + 1] = { str = firstchar, type = "alpha" }
 			prefix[#prefix + 1] = { str = secondchar, type = "other" }
 			return M.parser(string.sub(str, 3), prefix, ctx)
@@ -297,7 +353,7 @@ end
 -- the pressed keys: C-j itself (\n) can never enter the pattern because
 -- flash writes the pattern into its prompt buffer, which rejects
 -- newlines. All marker bytes are buffer-safe control characters.
-local MARKER_BYTES = { cn = "\x01", jp = "\x02", ko = "\x04", eo = "\x05" }
+local MARKER_BYTES = { cn = "\x01", jp = "\x02", ko = "\x04", en = "\x05" }
 
 ---Returns the marker table for the enabled force_keys.
 ---@param force_keys table lang -> key string (or false to disable)
@@ -322,7 +378,7 @@ end
 ---@param pattern string
 ---@param force_keys table? overrides M.config.force_keys
 ---@return string clean
----@return string? forced "cn" | "jp" | "ko" | "eo"
+---@return string? forced "cn" | "jp" | "ko" | "en"
 function M.parse_forced(pattern, force_keys)
 	local markers = markers_from_config(force_keys or M.config.force_keys)
 	if not markers.strip then
@@ -346,7 +402,7 @@ local function forced_langs(base, forced)
 		cn = forced == "cn",
 		jp = forced == "jp",
 		ko = forced == "ko",
-		original = forced == "eo" or base.original,
+		en = forced == "en" or base.en,
 		alpha_mixing = base.alpha_mixing,
 	}
 end
@@ -368,7 +424,7 @@ function M.make_mix_mode(langs, force_keys)
 		end
 		local all = M.parser(clean, nil, { count = 0, langs = eff_langs, comma = eff_comma })
 		if #all == 0 then
-			-- no interpretation at all (e.g. original disabled and the
+			-- no interpretation at all (e.g. en disabled and the
 			-- input has no pinyin/romaji reading): match the literal input
 			local ret = "\\V" .. vim.fn.escape(clean, "\\")
 			return ret, ret
@@ -390,7 +446,7 @@ function M.make_mix_mode(langs, force_keys)
 end
 
 -- Default mixed mode: every enabled language, default force keys.
-M.mix_mode = M.make_mix_mode(M.config.langs, M.config.force_keys)
+M.mix_mode = M.make_mix_mode(lang_flags(), M.config.force_keys)
 
 -- ------------------------------------------------------------------
 -- Swallows the C-c interrupt inside flash's input loop when (and only
@@ -450,12 +506,11 @@ local function prompt_patch()
 	end
 end
 
-local function build_opts(opts)
-	local langs = resolve_langs(opts)
+local function build_opts(langs, opts)
 	local keys = vim.tbl_deep_extend("force", {}, M.config.force_keys, opts.force_keys or {})
 	local mode = M.make_mix_mode(langs, keys)
 	local actions = {}
-	for _, lang in ipairs({ "cn", "jp", "ko", "eo" }) do
+	for _, lang in ipairs({ "cn", "jp", "ko", "en" }) do
 		local key = keys[lang]
 		if type(key) == "string" and key ~= "" then
 			local marker = MARKER_BYTES[lang]
@@ -492,14 +547,12 @@ local function build_opts(opts)
 	return vim.tbl_deep_extend("force", defaults, opts)
 end
 
-function M.jump(opts)
-	opts = opts or {}
-	get_flash().jump(build_opts(opts))
+function M.jump(langs, opts)
+	get_flash().jump(build_opts(M.resolve_langs(langs), opts or {}))
 end
 
-function M.remote(opts)
-	opts = opts or {}
-	get_flash().remote(build_opts(opts))
+function M.remote(langs, opts)
+	get_flash().remote(build_opts(M.resolve_langs(langs), opts or {}))
 end
 
 function M.merge_table(tab1, tab2)
@@ -518,7 +571,12 @@ function M.copy(table)
 end
 
 -- @param opts table
--- @field opts.langs table Language switches: { cn = boolean, jp = boolean, original = boolean }.
+-- @field[opt] opts.cn boolean|string Chinese matching: true (default scheme "xiaohe"), false, or a scheme name.
+-- @field[opt] opts.jp boolean|string Japanese matching: true (default scheme "roma"), false, or a scheme name.
+-- @field[opt] opts.ko boolean|string Korean matching: true (default scheme "roma"), false, or a scheme name.
+-- @field[opt] opts.en boolean Literal ASCII letter matching.
+-- @field[opt] opts.alpha_mixing boolean Allow mixing literal letters into language chains.
+-- @field opts.force_keys table Language-lock keys, e.g. { cn = "<C-c>" }; false disables one.
 -- @field opts.char_map table Char map for flypy.
 -- @field[opt] opts.char_map.comma table Override the default comma map.
 -- @field[opt] opts.char_map.append_comma table Append to the default comma map.
@@ -526,18 +584,26 @@ end
 -- @field[opt] opts.char_map.append_char2 table Append to the default char2patterns map.
 function M.setup(opts)
 	opts = opts or {}
-	if opts.langs then
-		for _, l in ipairs({ "cn", "jp", "ko", "original", "alpha_mixing" }) do
-			if type(opts.langs[l]) == "boolean" then
-				M.config.langs[l] = opts.langs[l]
-			end
+	local dirty = false
+	for _, lang in ipairs({ "cn", "jp", "ko" }) do
+		if opts[lang] ~= nil then
+			M.config[lang] = normalize_lang(lang, opts[lang])
+			dirty = true
 		end
+	end
+	for _, key in ipairs({ "en", "alpha_mixing" }) do
+		if type(opts[key]) == "boolean" then
+			M.config[key] = opts[key]
+			dirty = true
+		end
+	end
+	if dirty then
 		comma_cache = {}
-		M.mix_mode = M.make_mix_mode(M.config.langs)
+		M.mix_mode = M.make_mix_mode(lang_flags())
 	end
 	if opts.force_keys then
 		for lang, key in pairs(opts.force_keys) do
-			if vim.list_contains({ "cn", "jp", "ko", "eo" }, lang) then
+			if vim.list_contains({ "cn", "jp", "ko", "en" }, lang) then
 				M.config.force_keys[lang] = key -- string key, or false to disable
 			end
 		end

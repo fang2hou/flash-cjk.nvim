@@ -104,7 +104,7 @@ One JSON request on stdin, one JSON response on stdout:
 // request
 { "pattern": "ti", "lines": ["日本語…"],
   "langs": { "cn": true, "jp": true, "ko": true,
-             "original": true, "alpha_mixing": true } }
+             "en": true, "alpha_mixing": true } }
 // response
 { "matches": [[line, col, end_col, len]],   // byte cols; end_col = last char start
   "predictions": ["k", "tc", …] }           // per-match next letters for the labeler

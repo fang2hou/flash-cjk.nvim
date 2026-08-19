@@ -42,11 +42,11 @@ local function matches(pattern_fn, pattern, text)
 	return re:match_str(text) ~= nil
 end
 
-local mixed = fc.make_mix_mode({ cn = true, jp = true, original = true })
-local cn_only = fc.make_mix_mode({ cn = true, jp = false, original = true })
-local jp_only = fc.make_mix_mode({ cn = false, jp = true, original = true })
-local orig_only = fc.make_mix_mode({ cn = false, jp = false, original = true })
-local no_orig = fc.make_mix_mode({ cn = true, jp = true, original = false })
+local mixed = fc.make_mix_mode({ cn = true, jp = true, en = true })
+local cn_only = fc.make_mix_mode({ cn = true, jp = false, en = true })
+local jp_only = fc.make_mix_mode({ cn = false, jp = true, en = true })
+local orig_only = fc.make_mix_mode({ cn = false, jp = false, en = true })
+local no_orig = fc.make_mix_mode({ cn = true, jp = true, en = false })
 
 -- ---------------------------------------------------------------------------
 -- data sanity
@@ -76,9 +76,9 @@ ok(matches(mixed, "aoi", "あおい"), "vowel sequence aoi matches あおい (mi
 ok(matches(mixed, "ue", "うえ"), "ue matches うえ")
 
 -- Korean: romanization + two-set, both at once
-local trilingual = fc.make_mix_mode({ cn = true, jp = true, ko = true, original = true })
+local trilingual = fc.make_mix_mode({ cn = true, jp = true, ko = true, en = true })
 ok(matches(trilingual, "kim", "김"), "kim matches 김 (RR)")
-ok(matches(fc.make_mix_mode({ cn = false, jp = false, ko = true, original = false }), "kim", "김"), "kim matches 김 (ko only)")
+ok(matches(fc.make_mix_mode({ cn = false, jp = false, ko = true, en = false }), "kim", "김"), "kim matches 김 (ko only)")
 ok(matches(trilingual, "gim", "김"), "gim matches 김 (RR)")
 ok(matches(trilingual, "seoul", "서울"), "seoul matches 서울")
 ok(matches(trilingual, "han", "한"), "han matches 한")
@@ -90,7 +90,7 @@ ok(matches(trilingual, "dkswek", "앉다"), "dkswek matches 앉다 (compound fin
 ok(matches(trilingual, "gkr", "학"), "gkr matches 학 (two-set)")
 ok(matches(trilingual, "gkrry", "학교"), "gkrry matches 학교 (two-set)")
 ok(matches(trilingual, "hak", "학"), "hak matches 학 (romanization)")
-ok(not matches(fc.make_mix_mode({ cn = true, jp = true, ko = false, original = true }), "kim", "김"), "ko off: kim does not match 김")
+ok(not matches(fc.make_mix_mode({ cn = true, jp = true, ko = false, en = true }), "kim", "김"), "ko off: kim does not match 김")
 
 -- ko labeler prediction: 안녕 must predict both spellings
 local ko_strs = ko.strs("안녕")
@@ -106,7 +106,7 @@ end
 ok(k1 and k2, "ko.strs(안녕) predicts annyeong and dkssud")
 
 -- alpha_mixing = false: pure chains only, still matches everything CJK
-local pure = fc.make_mix_mode({ cn = true, jp = true, ko = true, original = true, alpha_mixing = false })
+local pure = fc.make_mix_mode({ cn = true, jp = true, ko = true, en = true, alpha_mixing = false })
 ok(matches(pure, "kim", "김"), "pure: kim matches 김")
 ok(matches(pure, "dkss", "안녕"), "pure: dkss matches 안녕")
 ok(matches(pure, "niho", "日本"), "pure: niho matches 日本")
@@ -115,7 +115,7 @@ ok(matches(pure, "niho", "日本"), "pure: niho matches 日本")
 ok(fc.parse_forced("ti\x01") == "ti" and select(2, fc.parse_forced("ti\x01")) == "cn", "parse_forced: cn marker")
 ok(select(2, fc.parse_forced("ti\x02")) == "jp", "parse_forced: jp marker")
 ok(select(2, fc.parse_forced("ti\x04")) == "ko", "parse_forced: ko marker")
-ok(select(2, fc.parse_forced("ti\x05")) == "eo", "parse_forced: eo marker")
+ok(select(2, fc.parse_forced("ti\x05")) == "en", "parse_forced: en marker")
 ok(select(2, fc.parse_forced("ti\x01\x02")) == "jp", "parse_forced: rightmost marker wins")
 ok(select(2, fc.parse_forced("ti")) == nil, "parse_forced: no marker")
 ok(matches(trilingual, "ti", "ち"), "ti matches ち by default")
@@ -140,7 +140,7 @@ ok(matches(jp_only, "hi", "人"), "jp-only: hi matches 人 (hito)")
 ok(not matches(cn_only, "ni", "に"), "zh-only: ni does not match kana に")
 ok(matches(cn_only, "ni", "你"), "zh-only: ni matches 你")
 -- per-jump force_keys: mode must honor the jump-specific keys
-local per_jump = fc.make_mix_mode({ cn = true, jp = true, ko = true, original = true }, { cn = "<C-d>" })
+local per_jump = fc.make_mix_mode({ cn = true, jp = true, ko = true, en = true }, { cn = "<C-d>" })
 ok(not matches(per_jump, "ti\x01", "ち"), "per-jump keys: cn marker still locks cn")
 ok(matches(per_jump, "ti\x02", "ち") == false and true or true, "per-jump keys: jp disabled (only cn bound)")
 -- empty marker set must not crash
@@ -148,17 +148,17 @@ ok(fc.parse_forced("ti", { cn = false, jp = false, ko = false }) == "ti", "all k
 ok(not matches(cn_only, "kyo", "京"), "zh-only: kyo does not match 京")
 ok(matches(mixed, "kyo", "京"), "mixed: kyo matches 京")
 
--- original flag: plain literal letters, nothing else
-ok(matches(orig_only, "ni", "nice"), "original-only: ni matches nice")
-ok(not matches(orig_only, "ni", "你"), "original-only: ni does not match 你")
-ok(not matches(orig_only, "ni", "日"), "original-only: ni does not match 日")
+-- en flag: plain literal letters, nothing else
+ok(matches(orig_only, "ni", "nice"), "en-only: ni matches nice")
+ok(not matches(orig_only, "ni", "你"), "en-only: ni does not match 你")
+ok(not matches(orig_only, "ni", "日"), "en-only: ni does not match 日")
 
--- original disabled: languages still match, literal letters do not
-ok(matches(no_orig, "ni", "你"), "no-original: ni still matches 你")
-ok(matches(no_orig, "ni", "日"), "no-original: ni still matches 日")
-ok(not matches(no_orig, "ni", "nice"), "no-original: ni does not match nice")
-ok(matches(no_orig, "1", "1"), "no-original: digits still match literally")
-ok(matches(no_orig, "n.", "n."), "no-original: uninterpretable input falls back to literal")
+-- en disabled: languages still match, literal letters do not
+ok(matches(no_orig, "ni", "你"), "en-off: ni still matches 你")
+ok(matches(no_orig, "ni", "日"), "en-off: ni still matches 日")
+ok(not matches(no_orig, "ni", "nice"), "en-off: ni does not match nice")
+ok(matches(no_orig, "1", "1"), "en-off: digits still match literally")
+ok(matches(no_orig, "n.", "n."), "en-off: uninterpretable input falls back to literal")
 
 -- punctuation
 ok(matches(mixed, "-", "ー"), "hyphen matches ー (jp)")
@@ -206,7 +206,7 @@ vim.api.nvim_buf_set_lines(0, 0, -1, false, {
 	"きょうと京都",
 })
 vim.api.nvim_win_set_cursor(0, { 1, 0 })
-local langs = { cn = true, jp = true, ko = true, original = true }
+local langs = { cn = true, jp = true, ko = true, en = true }
 local state = State.new({
 	pattern = "ni",
 	labels = "asdfghjklqwertyuiopzxcvbnm",
@@ -276,7 +276,7 @@ do
 	vim.api.nvim_buf_set_lines(0, 0, -1, false, { "日本語テスト ちちはち 梯子" })
 	local fired = false
 	local keys = vim.tbl_deep_extend("force", {}, fc.config.force_keys)
-	local mode_e2e = fc.make_mix_mode(fc.config.langs, keys)
+	local mode_e2e = fc.make_mix_mode(fc.resolve_langs(nil), keys)
 	local actions_e2e = {}
 	local jp_key = vim.api.nvim_replace_termcodes(keys.jp, true, true, true)
 	actions_e2e[jp_key] = function(state, _char)
@@ -291,7 +291,7 @@ do
 		search = { mode = mode_e2e },
 		actions = actions_e2e,
 		labeler = function(_, s)
-			require("flash-cjk.labeler").new(s, fc.config.langs, keys):update()
+			require("flash-cjk.labeler").new(s, fc.resolve_langs(nil), keys):update()
 		end,
 	})
 	vim.api.nvim_input("ti<C-j><esc>")
@@ -305,7 +305,7 @@ end
 do
 	vim.api.nvim_input("<esc>")
 	pcall(function()
-		fc.jump({ pattern = "x" })
+		fc.jump(nil, { pattern = "x" })
 	end) -- installs patches, loop exits on the prefed escape
 	local Prompt = require("flash.prompt")
 	Prompt.set("ti\x01", false)
@@ -313,7 +313,7 @@ do
 	Prompt.set("dk\x04\x02", false)
 	ok(Prompt.prompt == "⚡dk [韩] [日]", "prompt displays multiple locks (rightmost shown last)")
 	Prompt.set("ti\x05", false)
-	ok(Prompt.prompt == "⚡ti [英]", "prompt displays [英] for eo lock")
+	ok(Prompt.prompt == "⚡ti [英]", "prompt displays [英] for en lock")
 end
 
 -- rust fast path: full state with the binary-backed matcher must agree
@@ -322,7 +322,7 @@ do
 	if rust.available() then
 		local State = require("flash.state")
 		vim.api.nvim_buf_set_lines(0, 0, -1, false, { "日本語テスト ちちはち 梯子" })
-		local langs_r = { cn = true, jp = true, ko = true, original = true }
+		local langs_r = { cn = true, jp = true, ko = true, en = true }
 		local state_r = State.new({
 			pattern = "ti",
 			labels = "asdfghjklqwertyuiopzxcvbnm",
@@ -459,7 +459,7 @@ do
 	vim.api.nvim_buf_set_lines(0, 0, -1, false, { "日本語テスト ち 梯" })
 	vim.api.nvim_input("<esc>") -- prefed: the remote loop exits on it
 	local ok_remote, err_remote = pcall(function()
-		fc.remote({})
+		fc.remote()
 	end)
 	ok(ok_remote, "fc.remote() runs through the shared opts path (" .. tostring(err_remote) .. ")")
 
@@ -482,6 +482,34 @@ for _, p in ipairs({ "k", "ka", "kan", "kanj", "kanji", "kanjix" }) do
 	if p == "kanji" or p == "kanjix" then
 		print(string.format("perf %q: %.1fms, regex %dKB", p, dt, math.floor(#regex / 1024)))
 	end
+end
+
+-- ---------------------------------------------------------------------------
+-- new config API: setup normalization + resolve_langs semantics
+
+do
+	local saved = vim.deepcopy(fc.config)
+	fc.setup({ cn = true })
+	ok(fc.config.cn == "xiaohe", "setup: cn = true normalizes to the default scheme")
+	fc.setup({ jp = "roma" })
+	ok(fc.config.jp == "roma", "setup: scheme string stored as-is")
+	fc.setup({ cn = false })
+	ok(fc.config.cn == false, "setup: cn = false stored")
+	ok(pcall(fc.setup, { cn = "qwerty" }) == false, "setup: unknown scheme errors")
+	ok(pcall(fc.setup, { jp = 42 }) == false, "setup: wrong value type errors")
+	fc.config = vim.deepcopy(saved) -- defaults back for the resolve_langs checks
+	local l = fc.resolve_langs(nil)
+	ok(l.cn and l.jp and l.ko and l.en, "resolve_langs(nil): setup-enabled set (all defaults on)")
+	l = fc.resolve_langs({ "cn", "en" })
+	ok(l.cn and l.en and not l.jp and not l.ko, "resolve_langs: array fully decides the enabled set")
+	ok(fc.resolve_langs({ "kr" }).ko, "resolve_langs: kr is an alias of ko")
+	ok(pcall(fc.resolve_langs, { "xx" }) == false, "resolve_langs: unknown code errors")
+	fc.setup({ ko = false })
+	ok(fc.resolve_langs({ "ko" }).ko, "resolve_langs: array overrides a setup-disabled language")
+	local jp_en = fc.make_mix_mode(fc.resolve_langs({ "jp", "en" }))
+	ok(matches(jp_en, "ti", "ち"), "jp+en mode: ti matches ち")
+	ok(not matches(jp_en, "ti", "梯"), "jp+en mode: ti does not match 梯")
+	fc.config = saved
 end
 
 print(string.format("%d passed, %d failed", passed, failed))
