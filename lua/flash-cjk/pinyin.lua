@@ -109,11 +109,7 @@ function M.pinyin(chars)
 			end
 		end
 	end
-	local result = {}
-	for i = 1, #pinyins do
-		table.insert(result, pinyins[i])
-	end
-	return result
+	return pinyins
 end
 
 init_py_table()

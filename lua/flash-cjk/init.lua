@@ -158,6 +158,21 @@ end
 -- ------------------------------------------------------------------
 -- pattern building
 
+-- Shallow copy including the `_alpha` bookkeeping field.
+local function copy(tbl)
+	local c = {}
+	for k, v in pairs(tbl) do
+		c[k] = v
+	end
+	return c
+end
+
+local function merge_table(tab1, tab2)
+	for i = 1, #tab2 do
+		table.insert(tab1, tab2[i])
+	end
+	return tab1
+end
 
 local function make_nodes(comma)
 	return {
@@ -186,10 +201,10 @@ local function make_nodes(comma)
 	}
 end
 
-function M.regex(parser, comma)
-	local nodes = make_nodes(comma or comma_map({ cn = true, jp = false }))
+local function regex(segments, comma)
+	local nodes = make_nodes(comma)
 	local regexs = {}
-	for _, v in ipairs(parser) do
+	for _, v in ipairs(segments) do
 		regexs[#regexs + 1] = nodes[v.type](v.str)
 	end
 	return table.concat(regexs)
@@ -203,7 +218,7 @@ end
 ---@param prefix table? partial segmentation
 ---@param ctx {count: integer, langs: table<string,boolean>, comma: table<string,string>}
 ---@return table
-function M.parser(str, prefix, ctx)
+local function parser(str, prefix, ctx)
 	prefix = prefix or {}
 	if ctx == nil then
 		local flags = lang_flags()
@@ -226,24 +241,24 @@ function M.parser(str, prefix, ctx)
 		local results = {}
 		if secondchar == "" then
 			if ctx.langs.en and (ctx.langs.alpha_mixing ~= false or prefix._alpha ~= false) then
-				local p1 = M.copy(prefix)
+				local p1 = copy(prefix)
 				p1[#p1 + 1] = { str = firstchar, type = "alpha" }
-				results = M.merge_table(results, M.parser("", p1, ctx))
+				results = merge_table(results, parser("", p1, ctx))
 			end
 			if ctx.langs.cn then
-				local p2 = M.copy(prefix)
+				local p2 = copy(prefix)
 				p2[#p2 + 1] = { str = firstchar, type = "singlepin" }
-				results = M.merge_table(results, M.parser("", p2, ctx))
+				results = merge_table(results, parser("", p2, ctx))
 			end
 			if ctx.langs.jp and get_jp().pattern(firstchar) then
-				local p3 = M.copy(prefix)
+				local p3 = copy(prefix)
 				p3[#p3 + 1] = { str = firstchar, type = "jp" }
-				results = M.merge_table(results, M.parser("", p3, ctx))
+				results = merge_table(results, parser("", p3, ctx))
 			end
 			if ctx.langs.ko and get_ko().pattern(firstchar) then
-				local p4 = M.copy(prefix)
+				local p4 = copy(prefix)
 				p4[#p4 + 1] = { str = firstchar, type = "ko" }
-				results = M.merge_table(results, M.parser("", p4, ctx))
+				results = merge_table(results, parser("", p4, ctx))
 			end
 			return results
 		elseif string.match(secondchar, "%a") then
@@ -256,36 +271,36 @@ function M.parser(str, prefix, ctx)
 			-- alternatives and each giant CJK character class makes vim's
 			-- regex execution measurably slower.
 			if ctx.langs.cn and flypy.char2patterns[firstchar .. secondchar] then
-				local p = M.copy(prefix)
+				local p = copy(prefix)
 				p._alpha = false
 				p[#p + 1] = { str = firstchar .. secondchar, type = "pinyin" }
-				results = M.merge_table(results, M.parser(string.sub(str, 3), p, ctx))
+				results = merge_table(results, parser(string.sub(str, 3), p, ctx))
 			end
 			if ctx.langs.jp then
 				local J = get_jp()
 				local two = firstchar .. secondchar
 				local three = two .. thirdchar
 				if string.match(thirdchar, "%a") and J.pattern(three) then
-					local pj = M.copy(prefix)
+					local pj = copy(prefix)
 					pj._alpha = false
 					pj[#pj + 1] = { str = three, type = "jp" }
-					results = M.merge_table(results, M.parser(string.sub(str, 4), pj, ctx))
+					results = merge_table(results, parser(string.sub(str, 4), pj, ctx))
 				end
 				if J.pattern(two) then
-					local pj = M.copy(prefix)
+					local pj = copy(prefix)
 					pj._alpha = false
 					pj[#pj + 1] = { str = two, type = "jp" }
-					results = M.merge_table(results, M.parser(string.sub(str, 3), pj, ctx))
+					results = merge_table(results, parser(string.sub(str, 3), pj, ctx))
 				end
 				-- Mid-pattern single-letter romaji is only kept for keys that
 				-- are complete syllables on their own (vowels + n: あおい, にほんご);
 				-- consonant prefixes (ka, tsu...) are always typed to completion,
 				-- so they only matter as the last, unfinished segment.
 				if vim.list_contains({ "a", "e", "i", "o", "u", "n" }, firstchar) and J.pattern(firstchar) then
-					local pj = M.copy(prefix)
+					local pj = copy(prefix)
 					pj._alpha = false
 					pj[#pj + 1] = { str = firstchar, type = "jp" }
-					results = M.merge_table(results, M.parser(string.sub(str, 2), pj, ctx))
+					results = merge_table(results, parser(string.sub(str, 2), pj, ctx))
 				end
 			end
 			if ctx.langs.ko then
@@ -296,23 +311,23 @@ function M.parser(str, prefix, ctx)
 				for len = 4, 2, -1 do
 					local seg = string.sub(str, 1, len)
 					if #seg == len and K.pattern(seg) then
-						local pk = M.copy(prefix)
+						local pk = copy(prefix)
 						pk._alpha = false
 						pk[#pk + 1] = { str = seg, type = "ko" }
-						results = M.merge_table(results, M.parser(string.sub(str, len + 1), pk, ctx))
+						results = merge_table(results, parser(string.sub(str, len + 1), pk, ctx))
 					end
 				end
 				if K.vowel_letter(firstchar) and K.pattern(firstchar) then
-					local pk = M.copy(prefix)
+					local pk = copy(prefix)
 					pk._alpha = false
 					pk[#pk + 1] = { str = firstchar, type = "ko" }
-					results = M.merge_table(results, M.parser(string.sub(str, 2), pk, ctx))
+					results = merge_table(results, parser(string.sub(str, 2), pk, ctx))
 				end
 			end
 			if ctx.langs.en and (ctx.langs.alpha_mixing ~= false or prefix._alpha ~= false) then
-				local p = M.copy(prefix)
+				local p = copy(prefix)
 				p[#p + 1] = { str = firstchar, type = "alpha" }
-				results = M.merge_table(results, M.parser(string.sub(str, 2), p, ctx))
+				results = merge_table(results, parser(string.sub(str, 2), p, ctx))
 			end
 			return results
 		elseif ctx.langs.en and (ctx.langs.alpha_mixing ~= false or prefix._alpha ~= false)
@@ -320,20 +335,20 @@ function M.parser(str, prefix, ctx)
 		then
 			prefix[#prefix + 1] = { str = firstchar, type = "alpha" }
 			prefix[#prefix + 1] = { str = secondchar, type = "comma" }
-			return M.parser(string.sub(str, 3), prefix, ctx)
+			return parser(string.sub(str, 3), prefix, ctx)
 		elseif ctx.langs.en and (ctx.langs.alpha_mixing ~= false or prefix._alpha ~= false) then
 			prefix[#prefix + 1] = { str = firstchar, type = "alpha" }
 			prefix[#prefix + 1] = { str = secondchar, type = "other" }
-			return M.parser(string.sub(str, 3), prefix, ctx)
+			return parser(string.sub(str, 3), prefix, ctx)
 		else
 			return {}
 		end
 	elseif vim.list_contains(chars, firstchar) then
 		prefix[#prefix + 1] = { str = firstchar, type = "comma" }
-		return M.parser(string.sub(str, 2), prefix, ctx)
+		return parser(string.sub(str, 2), prefix, ctx)
 	else
 		prefix[#prefix + 1] = { str = firstchar, type = "other" }
-		return M.parser(string.sub(str, 2), prefix, ctx)
+		return parser(string.sub(str, 2), prefix, ctx)
 	end
 end
 
@@ -422,7 +437,7 @@ function M.make_mix_mode(langs, force_keys)
 			eff_langs = forced_langs(langs, forced)
 			eff_comma = comma_map(eff_langs)
 		end
-		local all = M.parser(clean, nil, { count = 0, langs = eff_langs, comma = eff_comma })
+		local all = parser(clean, nil, { count = 0, langs = eff_langs, comma = eff_comma })
 		if #all == 0 then
 			-- no interpretation at all (e.g. en disabled and the
 			-- input has no pinyin/romaji reading): match the literal input
@@ -432,7 +447,7 @@ function M.make_mix_mode(langs, force_keys)
 		local regexs = { [[\(]] }
 		local seen = {}
 		for _, v in ipairs(all) do
-			local r = M.regex(v, eff_comma)
+			local r = regex(v, eff_comma)
 			if not seen[r] then
 				seen[r] = true
 				regexs[#regexs + 1] = r
@@ -553,21 +568,6 @@ end
 
 function M.remote(langs, opts)
 	get_flash().remote(build_opts(M.resolve_langs(langs), opts or {}))
-end
-
-function M.merge_table(tab1, tab2)
-	for i = 1, #tab2 do
-		table.insert(tab1, tab2[i])
-	end
-	return tab1
-end
-
-function M.copy(table)
-	local copy = {}
-	for k, v in pairs(table) do
-		copy[k] = v
-	end
-	return copy
 end
 
 -- @param opts table
