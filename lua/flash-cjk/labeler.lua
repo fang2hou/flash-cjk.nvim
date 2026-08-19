@@ -80,46 +80,58 @@ function M:skip(win, labels)
 	if forced then
 		langs = { cn = forced == "cn", jp = forced == "jp", ko = forced == "ko" }
 	end
+	-- The per-match filter loops below cumulatively remove every label
+	-- that equals a predicted next letter of ANY match: collect the
+	-- union set first and filter the label pool once.
+	local ignorecase = vim.go.ignorecase
+	local skip_set = {}
+	local buf = nil
+	local line_cache = {}
+	local rust = package.loaded["flash-cjk.rust"]
+	local rust_on = rust and rust.available()
+	local preds = rust_on and rust.predictions[win] or nil
 	for _, match in ipairs(self.state.results) do
 		if match.win == win then
-			local buf = vim.api.nvim_win_get_buf(match.win)
+			buf = buf or vim.api.nvim_win_get_buf(match.win)
 			local start_line, end_line = match.pos[1], match.end_pos[1]
 			if start_line ~= end_line then
 				goto continue
 			end
 
-			local lines = vim.api.nvim_buf_get_lines(buf, start_line - 1, end_line, false)
+			local line = line_cache[start_line]
+			if line == nil then
+				local lines = vim.api.nvim_buf_get_lines(buf, start_line - 1, end_line, false)
+				if #lines == 0 then
+					goto continue
+				end
+				line = lines[1]
+				line_cache[start_line] = line
+			end
 			local start_col, end_col = match.pos[2] + 1, match.end_pos[2] + 2
-			if #lines == 0 then
-				goto continue
-			end
 
-			local strs = self:match_strs(lines[1], start_col, end_col, langs)
-			local filter_chars = {}
-			for i = 1, #strs do
-				filter_chars[i] = string.sub(strs[i], prefix_len + 1, prefix_len + 1)
-			end
-
-			labels = vim.tbl_filter(function(c)
-				if vim.go.ignorecase then
-					for _, char in ipairs(filter_chars) do
-						if c:lower() == char:lower() then
-							return false
-						end
-					end
-					return true
+			-- Rust fast path: predictions were computed alongside the
+			-- matches; use them instead of expanding spellings in Lua
+			local pred = preds and preds[string.format("%d:%d:%d", match.pos[1], match.pos[2], match.end_pos[2])]
+			if pred then
+				for i = 1, #pred do
+					local char = string.sub(pred, i, i)
+					skip_set[ignorecase and char:lower() or char] = true
 				end
-				for _, char in ipairs(filter_chars) do
-					if c == char then
-						return false
+			else
+				local strs = self:match_strs(line, start_col, end_col, langs)
+				for i = 1, #strs do
+					local char = string.sub(strs[i], prefix_len + 1, prefix_len + 1)
+					if char ~= "" then
+						skip_set[ignorecase and char:lower() or char] = true
 					end
 				end
-				return true
-			end, labels)
+			end
 		end
 		::continue::
 	end
-	return labels
+	return vim.tbl_filter(function(c)
+		return not skip_set[ignorecase and c:lower() or c]
+	end, labels)
 end
 
 function M:reset()
@@ -137,6 +149,14 @@ function M:reset()
 			self.labels = self:skip(win, self.labels)
 		end
 	end
+	-- pool bookkeeping for the monotonic assignment pointer: valid() must
+	-- still reject labels removed by skip() this keystroke (reuse case)
+	self.pool_set = {}
+	for _, l in ipairs(self.labels) do
+		self.pool_set[l] = true
+	end
+	self.used_labels = {}
+	self.next_label = 1
 	for _, m in ipairs(self.state.results) do
 		if m.label ~= false then
 			m.label = nil
@@ -145,15 +165,11 @@ function M:reset()
 end
 
 function M:valid(label)
-	return vim.tbl_contains(self.labels, label)
+	return self.pool_set[label] and not self.used_labels[label]
 end
 
-function M:use(label)
-	self.labels = vim.tbl_filter(function(c)
-		return c ~= label
-	end, self.labels)
-end
-
+---Assignments within one update are monotonic (the pool never gives a
+---label back), so a start index replaces per-assignment array filtering.
 ---@param m Flash.Match
 ---@param used boolean?
 function M:label(m, used)
@@ -165,10 +181,20 @@ function M:label(m, used)
 	if used then
 		label = self.used[pos]
 	else
-		label = self.labels[1]
+		while self.next_label <= #self.labels do
+			local candidate = self.labels[self.next_label]
+			if not self.used_labels[candidate] then
+				break
+			end
+			self.next_label = self.next_label + 1
+		end
+		label = self.labels[self.next_label]
 	end
 	if label and self:valid(label) then
-		self:use(label)
+		self.used_labels[label] = true
+		if not used then
+			self.next_label = self.next_label + 1
+		end
 		local reuse = self.state.opts.label.reuse == "all"
 			or (self.state.opts.label.reuse == "lowercase" and label:lower() == label)
 
@@ -177,7 +203,7 @@ function M:label(m, used)
 		end
 		m.label = label
 	end
-	return #self.labels > 0
+	return self.next_label <= #self.labels
 end
 
 function M:filter()
