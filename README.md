@@ -63,9 +63,6 @@ return {{
 }}
 ```
 
-The legacy module name still works: `require("flash-zh")` forwards to
-`flash-cjk`; existing configurations need no changes.
-
 ## Use it
 
 Press `s`, type, and jump — same flow as flash.nvim. If your target shows no

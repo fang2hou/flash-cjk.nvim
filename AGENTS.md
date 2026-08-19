@@ -43,7 +43,6 @@ Project-specific overrides:
 ## Layout
 
 - `lua/flash-cjk/` — plugin core: `init.lua` (segmentation, language modes, prompt/input patches), `labeler.lua`, `rust.lua` (native matcher bridge with fallback circuit breaker), `pinyin.lua`/`flypy.lua`/`jp.lua`/`ko.lua`/`jp_data.lua` (data and per-language logic)
-- `lua/flash-zh/` — legacy module-name compat shim forwarding to flash-cjk
 - `rust/` — optional native matcher: workspace with `flash-cjk-core` (lib) and `flash-cjk-search` (stdin/stdout JSON binary); `rust/data/` is generated
 - `tests/` — `run.lua` (behavior suite), `cross_validate_rust.lua` (strict rust↔vim-regex parity and fuzz), `e2e/` (LazyVim repro harness)
 - `scripts/` — data generators: `gen_jp_data.py` (Unihan → jp_data.lua), `export_rs.lua` (lua → rust/data)

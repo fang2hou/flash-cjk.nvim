@@ -20,7 +20,6 @@ input letter.
 - `labeler.lua` — flash labeler: next-letter prediction (from spellings or the Rust matcher's per-match predictions), skip-set, monotonic label pool
 - `rust.lua` — bridge to the native binary: per-keystroke spawn, JSON protocol, fallback circuit breaker to the vim-regex path
 - data modules (`pinyin.lua`, `flypy.lua`, `jp.lua`, `ko.lua`, `jp_data.lua`) — char-class tables and per-language pattern helpers; `jp_data.lua` is generated
-- `flash-zh/` — compat shim forwarding the legacy module name
 - `flash-cjk-core` (Rust lib) — charset, parser, DP matcher, prediction; mirrors Lua semantics
 - `flash-cjk-search` (Rust binary) — stdin/stdout JSON front for the core
 - `tests/` — behavior suite, strict rust↔vim cross-validation and fuzz, LazyVim-style e2e
