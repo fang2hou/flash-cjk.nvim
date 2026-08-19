@@ -34,7 +34,7 @@ fail=0
 if [ "$do_build" = 1 ]; then
   echo "== phase 1: Lazy build (README build command) =="
   if FLASH_CJK_E2E_ROOT="$root" FLASH_CJK_ROOT="$repo" \
-     nvim --headless -u "$here/repro.lua" +"Lazy build flash-cjk.nvim" +qa \
+     nvim --headless -u "$here/repro.lua" +"Lazy! build flash-cjk.nvim" +qa \
      >"$root/build.log" 2>&1 \
      && [ -x "$repo/rust/target/release/flash-cjk-search" ]; then
     echo "ok lazy build: cargo build ran through the lazy.nvim spec"
