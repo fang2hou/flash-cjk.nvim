@@ -1,5 +1,5 @@
--- flash-cjk test suite. Run:
---   nvim --headless +"lua dofile('tests/run.lua')" +qa
+-- Behavior test suite: matcher, labeler and the public API. Run:
+--   nvim --headless +"lua dofile('tests/run.lua')" +qa!
 -- Requires flash.nvim; when missing it is cloned into .deps/ automatically.
 
 local uv = vim.uv
@@ -23,6 +23,7 @@ end
 setup_rtp()
 
 local fc = require("flash-cjk")
+local cfg = require("flash-cjk.config")
 local ja = require("flash-cjk.ja")
 local ko = require("flash-cjk.ko")
 
@@ -267,15 +268,15 @@ ok(hit_ti_cn, "forced lock pattern still finds pinyin matches")
 ok(not hit_kana, "forced lock pattern drops Japanese matches")
 
 -- force_keys are configurable: remap cn to <C-d>, then verify and restore
-fc.setup({ force_keys = { zhcn = false, ja = false, ko = false } })
+fc.setup({ languages = { zhcn = { force_key = false }, ja = { force_key = false }, ko = { force_key = false } } })
 ok(fc.parse_forced("ti\x01") == "ti\x01", "all locks disabled: markers not stripped")
 ok(select(2, fc.parse_forced("ti\x01")) == nil, "all locks disabled: no forced lang")
-fc.setup({ force_keys = { zhcn = "<C-c>", ja = "<C-j>", ko = "<C-k>" } }) -- restore defaults
+fc.setup({ languages = { zhcn = { force_key = "<C-c>" }, ja = { force_key = "<C-j>" }, ko = { force_key = "<C-k>" } } }) -- restore defaults
 do
 	local State = require("flash.state")
 	vim.api.nvim_buf_set_lines(0, 0, -1, false, { "日本語テスト ちちはち 梯子" })
 	local fired = false
-	local keys = vim.tbl_deep_extend("force", {}, fc.config.force_keys)
+	local keys = cfg.force_keys(fc.config.languages)
 	local mode_e2e = fc.make_mix_mode(fc.resolve_langs(nil), keys)
 	local actions_e2e = {}
 	local ja_key = vim.api.nvim_replace_termcodes(keys.ja, true, true, true)
@@ -323,10 +324,11 @@ do
 		local State = require("flash.state")
 		vim.api.nvim_buf_set_lines(0, 0, -1, false, { "日本語テスト ちちはち 梯子" })
 		local langs_r = { zhcn = true, ja = true, ko = true, en = true }
+		local default_keys = cfg.force_keys(fc.config.languages)
 		local state_r = State.new({
 			pattern = "ti",
 			labels = "asdfghjklqwertyuiopzxcvbnm",
-			search = { mode = fc.make_mix_mode(langs_r, fc.config.force_keys) },
+			search = { mode = fc.make_mix_mode(langs_r, default_keys) },
 			matcher = rust.matcher(langs_r),
 			labeler = function() end,
 		})
@@ -335,7 +337,7 @@ do
 		local state_v = State.new({
 			pattern = "ti",
 			labels = "asdfghjklqwertyuiopzxcvbnm",
-			search = { mode = fc.make_mix_mode(langs_r, fc.config.force_keys) },
+			search = { mode = fc.make_mix_mode(langs_r, default_keys) },
 			labeler = function() end,
 		})
 		local span_set = function(st)
@@ -354,7 +356,7 @@ do
 		local state_f = State.new({
 			pattern = "ti",
 			labels = "asdfghjklqwertyuiopzxcvbnm",
-			search = { mode = fc.make_mix_mode(langs_r, fc.config.force_keys) },
+			search = { mode = fc.make_mix_mode(langs_r, default_keys) },
 			matcher = rust.matcher(langs_r),
 			labeler = function() end,
 		})
@@ -379,7 +381,7 @@ do
 				table.sort(t)
 				return table.concat(t, ",")
 			end
-			local base = { pattern = "ti", labels = "asdfghjkl", search = { mode = fc.make_mix_mode(langs_r, fc.config.force_keys) }, labeler = function() end }
+			local base = { pattern = "ti", labels = "asdfghjkl", search = { mode = fc.make_mix_mode(langs_r, default_keys) }, labeler = function() end }
 			local st_default = State.new(vim.tbl_deep_extend("force", base, { matcher = nil }))
 			local st_rust = State.new(vim.tbl_deep_extend("force", base, { matcher = rust.matcher(langs_r) }))
 			ok(win_span_set(st_rust) == win_span_set(st_default), "multi-window results match the default searcher")
@@ -403,7 +405,7 @@ do
 				local base_w = {
 					pattern = "ti",
 					labels = "asdfghjkl",
-					search = { mode = fc.make_mix_mode(langs_r, fc.config.force_keys), wrap = wrap },
+					search = { mode = fc.make_mix_mode(langs_r, default_keys), wrap = wrap },
 					labeler = function() end,
 				}
 				local dv = State.new(vim.tbl_deep_extend("force", base_w, { matcher = nil }))
@@ -430,7 +432,7 @@ do
 			local base_s = {
 				pattern = "ti",
 				labels = "asdfghjkl",
-				search = { mode = fc.make_mix_mode(langs_r, fc.config.force_keys) },
+				search = { mode = fc.make_mix_mode(langs_r, default_keys) },
 				labeler = function() end,
 			}
 			local st_d = State.new(vim.tbl_deep_extend("force", base_s, { matcher = nil }))
@@ -480,30 +482,50 @@ for _, p in ipairs({ "k", "ka", "kan", "kanj", "kanji", "kanjix" }) do
 end
 
 -- ---------------------------------------------------------------------------
--- new config API: setup normalization + resolve_langs semantics
+-- languages config API: shorthand normalization, deep merge, overrides
 
 do
 	local saved = vim.deepcopy(fc.config)
-	fc.setup({ zhcn = true })
-	ok(fc.config.zhcn == "xiaohe", "setup: cn = true normalizes to the default scheme")
-	fc.setup({ ja = "roma" })
-	ok(fc.config.ja == "roma", "setup: scheme string stored as-is")
-	fc.setup({ zhcn = false })
-	ok(fc.config.zhcn == false, "setup: cn = false stored")
-	ok(pcall(fc.setup, { zhcn = "qwerty" }) == false, "setup: unknown scheme errors")
-	ok(pcall(fc.setup, { ja = 42 }) == false, "setup: wrong value type errors")
+	fc.setup({ languages = { zhcn = true } })
+	ok(
+		fc.config.languages.zhcn.enabled and fc.config.languages.zhcn.scheme == "xiaohe",
+		"setup: true shorthand enables with the default scheme"
+	)
+	fc.setup({ languages = { zhcn = false } })
+	ok(fc.config.languages.zhcn.enabled == false, "setup: false shorthand disables the language")
+	fc.setup({ languages = { ja = { force_key = "<C-d>" } } })
+	ok(
+		fc.config.languages.ja.force_key == "<C-d>" and fc.config.languages.ja.scheme == "roma",
+		"setup: field-level deep merge keeps unspecified fields"
+	)
+	ok(fc.config.languages.ko.force_key == "<C-k>", "setup: deep merge leaves other languages alone")
+	fc.setup({ languages = { ko = { scheme = "roma" } } })
+	ok(fc.config.languages.ko.scheme == "roma", "setup: scheme field stored")
+	ok(pcall(fc.setup, { languages = { zhcn = { scheme = "qwerty" } } }) == false, "setup: unknown scheme errors")
+	ok(pcall(fc.setup, { languages = { en = { scheme = "roma" } } }) == false, "setup: en has no scheme concept")
+	ok(pcall(fc.setup, { languages = { zhcn = 42 } }) == false, "setup: wrong entry type errors")
+	ok(pcall(fc.setup, { languages = { xx = true } }) == false, "setup: unknown language code errors")
 	fc.config = vim.deepcopy(saved) -- defaults back for the resolve_langs checks
 	local l = fc.resolve_langs(nil)
 	ok(l.zhcn and l.ja and l.ko and l.en, "resolve_langs(nil): setup-enabled set (all defaults on)")
 	l = fc.resolve_langs({ "zhcn", "en" })
 	ok(l.zhcn and l.en and not l.ja and not l.ko, "resolve_langs: array fully decides the enabled set")
-	ok(fc.resolve_langs({ "kr" }).ko, "resolve_langs: kr is an alias of ko")
+	ok(pcall(fc.resolve_langs, { "kr" }) == false, "resolve_langs: kr alias removed")
 	ok(pcall(fc.resolve_langs, { "xx" }) == false, "resolve_langs: unknown code errors")
-	fc.setup({ ko = false })
+	fc.setup({ languages = { ko = false } })
 	ok(fc.resolve_langs({ "ko" }).ko, "resolve_langs: array overrides a setup-disabled language")
+	l = fc.resolve_langs(nil, { languages = { ko = false } })
+	ok(not l.ko and l.ja, "resolve_langs: per-jump languages override applies")
+	-- per-jump overrides must not leak into the setup state
+	vim.api.nvim_input("<esc>")
+	local ok_jump = pcall(function()
+		fc.jump(nil, { pattern = "x", languages = { ja = { force_key = "<C-d>" } } })
+	end)
+	ok(ok_jump, "jump: per-jump languages override runs through the loop")
+	ok(fc.config.languages.ja.force_key == "<C-j>", "jump: per-jump override does not mutate the setup config")
 	local ja_en = fc.make_mix_mode(fc.resolve_langs({ "ja", "en" }))
-	ok(matches(ja_en, "ti", "ち"), "jp+en mode: ti matches ち")
-	ok(not matches(ja_en, "ti", "梯"), "jp+en mode: ti does not match 梯")
+	ok(matches(ja_en, "ti", "ち"), "ja+en mode: ti matches ち")
+	ok(not matches(ja_en, "ti", "梯"), "ja+en mode: ti does not match 梯")
 	fc.config = saved
 end
 

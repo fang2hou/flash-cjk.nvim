@@ -38,10 +38,10 @@ local function get_flash()
 end
 
 -- Default mixed mode: every enabled language, default force keys.
-M.mix_mode = M.make_mix_mode(config.lang_flags(), M.config.force_keys)
+M.mix_mode = M.make_mix_mode(config.lang_flags(), config.force_keys(M.config.languages))
 
 local function build_opts(langs, opts)
-	local keys = vim.tbl_deep_extend("force", {}, M.config.force_keys, opts.force_keys or {})
+	local keys = config.force_keys(config.effective_languages(opts))
 	local mode = M.make_mix_mode(langs, keys)
 	local actions = {}
 	for _, lang in ipairs({ "zhcn", "ja", "ko", "en" }) do
@@ -83,49 +83,46 @@ end
 
 ---Starts a flash jump with CJK matching.
 ---@param langs string[]? language codes for this jump, e.g. { "zhcn", "en" }
----@param opts table? flash options (plus force_keys)
+---@param opts table? flash options (plus languages overrides)
 function M.jump(langs, opts)
-	get_flash().jump(build_opts(M.resolve_langs(langs), opts or {}))
+	opts = opts or {}
+	get_flash().jump(build_opts(M.resolve_langs(langs, opts), opts))
 end
 
 ---Starts a flash remote (operator-pending) jump with CJK matching.
 ---@param langs string[]? language codes for this jump, e.g. { "zhcn", "en" }
----@param opts table? flash options (plus force_keys)
+---@param opts table? flash options (plus languages overrides)
 function M.remote(langs, opts)
-	get_flash().remote(build_opts(M.resolve_langs(langs), opts or {}))
+	opts = opts or {}
+	get_flash().remote(build_opts(M.resolve_langs(langs, opts), opts))
 end
 
 -- @param opts table
--- @field[opt] opts.zhcn boolean|string Chinese matching: true (default scheme "xiaohe"), false, or a scheme name.
--- @field[opt] opts.ja boolean|string Japanese matching: true (default scheme "roma"), false, or a scheme name.
--- @field[opt] opts.ko boolean|string Korean matching: true (default scheme "roma"), false, or a scheme name.
--- @field[opt] opts.en boolean Literal ASCII letter matching.
+-- @field[opt] opts.languages table Per-language config, deep-merged
+--   into the defaults: { zhcn = { enabled = true, scheme =
+--   "xiaohe", force_key = "<C-c>" }, ja = ..., ko = ..., en = {
+--   force_key = "<C-e>" } }; entries also accept the true/false
+--   shorthand.
 -- @field[opt] opts.alpha_mixing boolean Allow mixing literal letters into language chains.
--- @field opts.force_keys table Language-lock keys, e.g. { zhcn = "<C-c>" }; false disables one.
 function M.setup(opts)
 	opts = opts or {}
 	local dirty = false
-	for _, lang in ipairs({ "zhcn", "ja", "ko" }) do
-		if opts[lang] ~= nil then
-			M.config[lang] = config.normalize_lang(lang, opts[lang])
+	if opts.languages ~= nil then
+		if type(opts.languages) ~= "table" then
+			error("flash-cjk: languages must be a table")
+		end
+		for lang, value in pairs(opts.languages) do
+			local norm = config.normalize_language(lang, value)
+			M.config.languages[lang] = vim.tbl_deep_extend("force", {}, M.config.languages[lang], norm)
 			dirty = true
 		end
 	end
-	for _, key in ipairs({ "en", "alpha_mixing" }) do
-		if type(opts[key]) == "boolean" then
-			M.config[key] = opts[key]
-			dirty = true
-		end
+	if type(opts.alpha_mixing) == "boolean" then
+		M.config.alpha_mixing = opts.alpha_mixing
+		dirty = true
 	end
 	if dirty then
 		M.mix_mode = M.make_mix_mode(config.lang_flags())
-	end
-	if opts.force_keys then
-		for lang, key in pairs(opts.force_keys) do
-			if vim.list_contains({ "zhcn", "ja", "ko", "en" }, lang) then
-				M.config.force_keys[lang] = key -- string key, or false to disable
-			end
-		end
 	end
 end
 

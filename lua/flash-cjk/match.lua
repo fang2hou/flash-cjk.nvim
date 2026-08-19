@@ -303,7 +303,7 @@ end
 ---@return string clean
 ---@return string? forced "zhcn" | "ja" | "ko" | "en"
 function M.parse_forced(pattern, force_keys)
-	local markers = markers_from_config(force_keys or config.config.force_keys)
+	local markers = markers_from_config(force_keys or config.force_keys(config.config.languages))
 	if not markers.strip then
 		return pattern, nil
 	end

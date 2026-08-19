@@ -4,37 +4,39 @@
 
 local M = {}
 
--- Default configuration: every language is enabled. Each entry can be
--- tuned via setup():
---   zhcn/ja/ko  true (default scheme), false, or a scheme name
---                 (see SCHEMES below: "zhcn" "xiaohe", ja/ko "roma")
---   en            literal ASCII letters, i.e. plain flash.nvim behavior
---   alpha_mixing  false additionally drops interpretations that mix
---                 literal letters with language segments (e.g. alpha
---                 "n" + pinyin "i"); the original flash-zh behavior
---                 keeps them; turning mixing off trades some
---                 mixed-chain reachability (e.g. pinyin "nihao"
---                 variants) for lower regex cost on long inputs;
---                 measure before enabling.
--- Per-jump overrides take an array of language codes instead, e.g.
--- jump({ "zhcn", "en" }) -- see M.resolve_langs.
+-- Language codes in marker/action order.
+local LANGS = { "zhcn", "ja", "ko", "en" }
+
+-- Default configuration: every language is enabled. Each languages
+-- entry tunes one language (deep-merged by setup; unspecified fields
+-- keep their current value):
+--   enabled   boolean; the entry also accepts the true/false shorthand
+--   scheme    "xiaohe" for zhcn, "roma" for ja/ko (see SCHEMES);
+--             en matches literal ASCII, has no scheme concept and
+--             errors if given one
+--   force_key key locking matching to this language mid-input; the raw
+--             key bytes are never stored in the pattern, each lock
+--             writes a buffer-safe internal marker instead (C-j's
+--             newline would break flash's prompt). C-c's interrupt is
+--             intercepted and dispatched to the lock action while a
+--             flash-cjk jump is active. false disables the lock.
+-- alpha_mixing (top level): false additionally drops interpretations
+--   that mix literal letters with language segments (e.g. alpha "n" +
+--   pinyin "i"); the original flash-zh behavior keeps them; turning
+--   mixing off trades some mixed-chain reachability (e.g. pinyin
+--   "nihao" variants) for lower regex cost on long inputs; measure
+--   before enabling.
+-- Per-jump overrides use the same shape: jump({ "zhcn", "en" }) is
+-- the enabled-set shorthand, jump(nil, { languages = ... }) overrides
+-- fields for one jump -- see M.resolve_langs.
 M.config = {
-	zhcn = "xiaohe",
-	ja = "roma",
-	ko = "roma",
-	en = true,
-	alpha_mixing = true,
-	-- Keys that lock matching to a single language mid-input. The raw
-	-- key bytes are never stored in the pattern; each lock writes a
-	-- buffer-safe internal marker instead (C-j's newline would break
-	-- flash's prompt). C-c's interrupt is intercepted and dispatched to
-	-- the lock action while a flash-cjk jump is active.
-	force_keys = {
-		zhcn = "<C-c>",
-		ja = "<C-j>",
-		ko = "<C-k>",
-		en = "<C-e>",
+	languages = {
+		zhcn = { enabled = true, scheme = "xiaohe", force_key = "<C-c>" },
+		ja = { enabled = true, scheme = "roma", force_key = "<C-j>" },
+		ko = { enabled = true, scheme = "roma", force_key = "<C-k>" },
+		en = { enabled = true, force_key = "<C-e>" },
 	},
+	alpha_mixing = true,
 }
 
 -- Registered matching schemes per language. Each language currently
@@ -47,48 +49,114 @@ local SCHEMES = {
 	ko = { default = "roma", roma = true },
 }
 
----Normalizes a setup value for zhcn/ja/ko: true -> the default scheme
----name, a string -> the validated scheme, false -> false.
+---Normalizes one languages[lang] value: true -> enabled with the
+---default scheme, false -> disabled, a table -> validated fields.
 ---@param lang string
----@param value boolean|string
----@return string|false
-function M.normalize_lang(lang, value)
-	if value == true then
-		return SCHEMES[lang].default
-	elseif type(value) == "string" then
-		if SCHEMES[lang][value] then
-			return value
-		end
-		error(("flash-cjk: unknown %s scheme %q"):format(lang, value))
-	elseif value == false then
-		return false
+---@param value boolean|table
+---@return table normalized { enabled?, scheme?, force_key? }
+function M.normalize_language(lang, value)
+	if not vim.list_contains(LANGS, lang) then
+		error("flash-cjk: unknown language code: " .. tostring(lang))
 	end
-	error(("flash-cjk: %s must be a boolean or scheme string"):format(lang))
+	if value == true then
+		local norm = { enabled = true }
+		if SCHEMES[lang] then
+			norm.scheme = SCHEMES[lang].default
+		end
+		return norm
+	elseif value == false then
+		return { enabled = false }
+	elseif type(value) ~= "table" then
+		error(("flash-cjk: languages[%s] must be a boolean or table"):format(lang))
+	end
+	local norm = {}
+	for field, v in pairs(value) do
+		if field == "enabled" then
+			if type(v) ~= "boolean" then
+				error(("flash-cjk: languages[%s].enabled must be a boolean"):format(lang))
+			end
+			norm.enabled = v
+		elseif field == "scheme" then
+			if not SCHEMES[lang] then
+				error(("flash-cjk: languages[%s] has no scheme concept"):format(lang))
+			end
+			if type(v) ~= "string" or not SCHEMES[lang][v] then
+				error(("flash-cjk: unknown %s scheme %q"):format(lang, tostring(v)))
+			end
+			norm.scheme = v
+		elseif field == "force_key" then
+			if type(v) ~= "string" and v ~= false then
+				error(("flash-cjk: languages[%s].force_key must be a string or false"):format(lang))
+			end
+			norm.force_key = v
+		end
+		-- unknown fields are ignored: forward compatibility
+	end
+	return norm
 end
 
----Boolean language flags derived from config, as consumed by the
----parser, labeler and the Rust bridge (zhcn/ja/ko are enabled unless
----the scheme is explicitly false).
+---Boolean language flags for a languages config table, as consumed by
+---the parser, labeler and the Rust bridge.
+---@param languages table? defaults to M.config.languages
 ---@return table langs boolean flags
-function M.lang_flags()
+function M.lang_flags(languages)
+	languages = languages or M.config.languages
 	return {
-		zhcn = M.config.zhcn ~= false,
-		ja = M.config.ja ~= false,
-		ko = M.config.ko ~= false,
-		en = M.config.en,
+		zhcn = languages.zhcn.enabled,
+		ja = languages.ja.enabled,
+		ko = languages.ko.enabled,
+		en = languages.en.enabled,
 		alpha_mixing = M.config.alpha_mixing,
 	}
 end
 
----Resolves a jump/remote language array into boolean language flags.
----nil or {} -> the setup-enabled set; otherwise the array fully
----decides the enabled set for this jump ("kr" is an alias of "ko";
----alpha_mixing always comes from config).
+---Effective per-jump languages config: the setup state deep-merged
+---with the per-jump opts.languages override (same shape as setup).
+---@param opts table? jump/remote opts
+---@return table languages
+function M.effective_languages(opts)
+	local languages = vim.tbl_deep_extend("force", {}, M.config.languages)
+	local override = opts and opts.languages
+	if override ~= nil then
+		if type(override) ~= "table" then
+			error("flash-cjk: languages must be a table")
+		end
+		for lang, value in pairs(override) do
+			languages[lang] = vim.tbl_deep_extend(
+				"force",
+				{},
+				languages[lang],
+				M.normalize_language(lang, value)
+			)
+		end
+	end
+	return languages
+end
+
+---Flat force-key map derived from a languages config table, as
+---consumed by make_mix_mode and the labeler.
+---@param languages table
+---@return table keys lang -> key string (or false/unset)
+function M.force_keys(languages)
+	local keys = {}
+	for _, lang in ipairs(LANGS) do
+		keys[lang] = languages[lang].force_key
+	end
+	return keys
+end
+
+---Resolves a jump/remote language argument into boolean language
+---flags. nil or {} -> the setup-enabled set (with the per-jump
+---opts.languages override applied); otherwise the array is the
+---enabled-set shorthand: it fully decides the enabled set for this
+---jump (schemes fall back to each language's default) and overrides
+---the setup switches. alpha_mixing always comes from config.
 ---@param ary string[]? language codes, e.g. { "zhcn", "en" }
+---@param opts table? per-jump opts ({ languages = ... } honored)
 ---@return table langs boolean flags
-function M.resolve_langs(ary)
+function M.resolve_langs(ary, opts)
 	if ary == nil or #ary == 0 then
-		return M.lang_flags()
+		return M.lang_flags(M.effective_languages(opts))
 	end
 	local langs = {
 		zhcn = false,
@@ -98,11 +166,10 @@ function M.resolve_langs(ary)
 		alpha_mixing = M.config.alpha_mixing,
 	}
 	for _, code in ipairs(ary) do
-		local lang = code == "kr" and "ko" or code
-		if lang ~= "zhcn" and lang ~= "ja" and lang ~= "ko" and lang ~= "en" then
+		if not vim.list_contains(LANGS, code) then
 			error("flash-cjk: unknown language code: " .. tostring(code))
 		end
-		langs[lang] = true
+		langs[code] = true
 	end
 	return langs
 end

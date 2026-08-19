@@ -50,7 +50,16 @@ return {{
             require("flash-cjk").jump()
         end,
         desc = "Flash between Chinese/Japanese/Korean"
-    }}
+    }},
+    opts = {
+        languages = {
+            zhcn = {force_key = "<C-c>"},  -- default: enabled, scheme "xiaohe"
+            ja = {force_key = "<C-j>"},         -- default scheme: "roma"
+            ko = {force_key = "<C-k>"},
+            en = {force_key = "<C-e>"},         -- en has no scheme concept
+        },
+        alpha_mixing = true,
+    }
 }, {
     "folke/flash.nvim",
     event = "VeryLazy",
@@ -85,50 +94,46 @@ Chinese / Japanese / Korean / English and recompute instantly:
 - Locks stack into the input string: **backspacing over the marker releases
   it**; pressing another lock key switches directly
 - Literal English matching is unaffected while locked
-- Keys are configurable (or `false` to disable):
+- Lock keys are configurable per language (`force_key`, or `false` to
+  disable) in the `languages` table — see below
+
+### Language configuration
+
+Each language is configured independently through the `languages` table —
+globally via setup, or per jump via a language-code array or a field-level
+override:
 
 ```lua
 require("flash-cjk").setup({
-    force_keys = {
-        cn = "<C-c>",
-        jp = "<C-j>",
-        ko = "<C-k>",
-        en = "<C-e>",
+    languages = {
+        zhcn = {enabled = true, scheme = "xiaohe", force_key = "<C-c>"},
+        ja = {enabled = true, scheme = "roma", force_key = "<C-j>"},
+        ko = {enabled = true, scheme = "roma", force_key = "<C-k>"},
+        en = {enabled = true, force_key = "<C-e>"},  -- no scheme concept
     },
-})
-```
-
-### Language switches
-
-Each matcher toggles independently — globally via setup, or per jump via a
-language-code array:
-
-```lua
-require("flash-cjk").setup({
-    cn = "xiaohe",   -- Chinese pinyin; true / false, or a scheme name
-    jp = "roma",     -- Japanese romaji (kanji readings + kana)
-    ko = "roma",     -- Korean (romanization + two-set keys)
-    en = true,       -- literal ASCII letters (plain flash.nvim behavior)
     alpha_mixing = true,
 })
 
-require("flash-cjk").jump({ "jp", "ko", "en" })  -- this jump: no Chinese
+require("flash-cjk").jump({ "ja", "ko", "en" })  -- this jump: no Chinese
+require("flash-cjk").jump(nil, { languages = { ja = { force_key = "<C-d>" } } })
 ```
 
-`cn`/`jp`/`ko` accept `true` (the default scheme), `false` (off), or a scheme
-name — `"xiaohe"` for Chinese, `"roma"` for Japanese/Korean (the only schemes
-today; more can plug in later). `jump()` without an array uses the
-setup-enabled set; a given array fully decides that jump's set (`"kr"` is an
-alias of `"ko"`) and overrides the setup switches. The second argument passes
-flash options through: `jump(nil, { force_keys = { cn = "<C-d>" } })`.
+`scheme` accepts `"xiaohe"` for `zhcn` and `"roma"` for `ja`/`ko` (the only
+schemes today; more can plug in later); `en` matches literal ASCII, has no
+scheme concept and errors if given one. Entries also accept the `true`/`false`
+shorthand for `enabled`. `setup` deep-merges: unspecified fields keep their
+current value. `jump()` without an array uses the setup-enabled set; a given
+array fully decides that jump's set (schemes fall back to each language's
+default) and overrides the setup switches. The second argument passes flash
+options through, with `languages` overriding fields for that jump only.
 
-Single-language users keep one switch on. Notes:
+Single-language users keep one language enabled. Notes:
 
 - With `en` off, digits and uppercase still match literally; uninterpretable
   input (like `n.`) degrades to literal matching.
-- Punctuation follows the language switches: with `cn` off, `,` matches 、
+- Punctuation follows the language switches: with `zhcn` off, `,` matches 、
   (Japanese) instead of ，(fullwidth comma); `。` is shared by zh/ja and always
-  matches; `-` → ー belongs to `jp`.
+  matches; `-` → ー belongs to `ja`.
 - `alpha_mixing = false` (performance): drops interpretations that mix literal
   letters with language segments (e.g. some `nihao` variants inherited from
   flash-zh); 40–60% lower worst-case latency on long trilingual inputs, at the
@@ -147,7 +152,9 @@ Single-language users keep one switch on. Notes:
   McCune-Reischauer spellings (`kim`/`gim` → 김), matched per-syllable by
   prefix; two-set (두벌식) keys work alongside (`dkss` → 안녕, `gkrry` → 학교,
   `dkswek` → 앉다); tense jamo need shift — use romanization (`kk`) instead;
-  single-vowel segments work mid-input like Japanese vowels (`ai` → 아이).\n\n## Rust acceleration (optional)
+  single-vowel segments work mid-input like Japanese vowels (`ai` → 아이).
+
+## Rust acceleration (optional)
 
 An optional native matcher builds once and turns on automatically: on the
 benchmark below it cuts the mean per-keystroke cost by 1.6× and the p95 tail
