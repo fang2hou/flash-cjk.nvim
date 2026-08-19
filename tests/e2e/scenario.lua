@@ -145,4 +145,31 @@ do
   end
 end
 
+-- nil-opts bounds: flash always passes from/to today, but the
+-- matcher's own fallback must still use documented window marks --
+-- line("w1") is not a mark (returns 0 on nvim >= 0.10) and made the
+-- rust path silently return zero matches with no vim-regex fallback
+if not no_rust then
+  do
+    local matcher = rust.matcher({ cn = true, jp = true, ko = true, original = true })
+    local fake = {
+      pattern = {
+        pattern = "ti",
+        empty = function()
+          return false
+        end,
+      },
+    }
+    local ms = matcher(vim.api.nvim_get_current_win(), fake, nil)
+    ok(#ms > 0, "nil-opts bounds: visible matches found through the w0/w$ fallback")
+    local plausible = true
+    for _, m2 in ipairs(ms) do
+      local text = (vim.api.nvim_buf_get_lines(0, m2.pos[1] - 1, m2.pos[1], false))[1] or ""
+      local b = text:byte(m2.pos[2] + 1)
+      plausible = plausible and (b == string.byte("t") or (b and b >= 0x80))
+    end
+    ok(plausible, "nil-opts bounds: every match sits on a plausible match start")
+  end
+end
+
 finish()

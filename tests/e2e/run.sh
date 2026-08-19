@@ -53,8 +53,8 @@ run_phase "$root/luajit.out" 1
 cat "$root/luajit.out"
 
 echo "== parity: rust vs vim-regex =="
-grep "^ok" "$root/rust.out" | grep -v "rust path" >"$root/rust.ok"
-grep "^ok" "$root/luajit.out" | grep -v "rust path" >"$root/luajit.ok"
+grep "^ok" "$root/rust.out" | grep -v "rust path" | grep -v "nil-opts" >"$root/rust.ok"
+grep "^ok" "$root/luajit.out" | grep -v "rust path" | grep -v "nil-opts" >"$root/luajit.ok"
 if grep -q "^FAIL" "$root/rust.out" "$root/luajit.out" 2>/dev/null; then
   echo "FAIL scenarios contain failures" && fail=1
 elif diff "$root/rust.ok" "$root/luajit.ok" >/dev/null; then

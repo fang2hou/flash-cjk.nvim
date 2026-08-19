@@ -103,11 +103,19 @@ function M.matcher(langs)
 			end)
 		local to = opts.to and opts.to[1]
 			or vim.api.nvim_win_call(win, function()
-				return vim.fn.line("w1")
+				-- w$ is the documented last visible line; "w1" is not a
+				-- valid mark (line("w1") returns 0 on nvim >= 0.10) and
+				-- yielded an empty range -- zero matches, no fallback
+				return vim.fn.line("w$")
 			end)
 		local lines = vim.api.nvim_buf_get_lines(buf, from - 1, to, false)
 		local resp = M.search(state.pattern.pattern, lines, langs)
 		if resp == nil then
+			-- binary failed: matches come from the fallback searcher,
+			-- so this window's predictions belong to an older
+			-- keystroke -- drop them (the labeler expands spellings in
+			-- Lua when a prediction key is missing)
+			M.predictions[win] = {}
 			return fallback()
 		end
 		local matches = {}
