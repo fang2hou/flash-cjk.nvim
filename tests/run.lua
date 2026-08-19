@@ -301,6 +301,138 @@ do
 	ok(#state_e2e.results == 3, "end-to-end: locked-jp finds the three ち")
 end
 
+-- prompt shows lock markers as readable tags (display-only transform)
+do
+	vim.api.nvim_input("<esc>")
+	pcall(function()
+		fc.jump({ pattern = "x" })
+	end) -- installs patches, loop exits on the prefed escape
+	local Prompt = require("flash.prompt")
+	Prompt.set("ti\x01", false)
+	ok(Prompt.prompt == "⚡ti [中]", "prompt displays [中] for cn lock")
+	Prompt.set("dk\x04\x02", false)
+	ok(Prompt.prompt == "⚡dk [韩] [日]", "prompt displays multiple locks (rightmost shown last)")
+	Prompt.set("ti\x05", false)
+	ok(Prompt.prompt == "⚡ti [英]", "prompt displays [英] for eo lock")
+end
+
+-- rust fast path: full state with the binary-backed matcher must agree
+do
+	local rust = require("flash-cjk.rust")
+	if rust.available() then
+		local State = require("flash.state")
+		vim.api.nvim_buf_set_lines(0, 0, -1, false, { "日本語テスト ちちはち 梯子" })
+		local langs_r = { cn = true, jp = true, ko = true, original = true }
+		local state_r = State.new({
+			pattern = "ti",
+			labels = "asdfghjklqwertyuiopzxcvbnm",
+			search = { mode = fc.make_mix_mode(langs_r, fc.config.force_keys) },
+			matcher = rust.matcher(langs_r),
+			labeler = function() end,
+		})
+		-- compare against the regex path on identical input instead of
+		-- hardcoding counts
+		local state_v = State.new({
+			pattern = "ti",
+			labels = "asdfghjklqwertyuiopzxcvbnm",
+			search = { mode = fc.make_mix_mode(langs_r, fc.config.force_keys) },
+			labeler = function() end,
+		})
+		local span_set = function(st)
+			local t = {}
+			for _, m in ipairs(st.results) do
+				t[#t + 1] = m.pos[1] .. ":" .. m.pos[2] .. ":" .. m.end_pos[2]
+			end
+			table.sort(t)
+			return table.concat(t, ",")
+		end
+		ok(span_set(state_r) == span_set(state_v), "rust matcher spans identical to regex path")
+
+		-- circuit breaker: tripping it must degrade to identical spans
+		-- through the vim-regex path (the graceful-fallback promise)
+		rust.disable_for_test()
+		local state_f = State.new({
+			pattern = "ti",
+			labels = "asdfghjklqwertyuiopzxcvbnm",
+			search = { mode = fc.make_mix_mode(langs_r, fc.config.force_keys) },
+			matcher = rust.matcher(langs_r),
+			labeler = function() end,
+		})
+		ok(span_set(state_f) == span_set(state_v), "circuit breaker falls back to identical regex spans")
+		rust.enable_for_test()
+
+		-- multi-window parity: two splits of one buffer must produce the
+		-- same result set as flash's default searcher (flash dedups
+		-- same-buffer identical positions across windows by itself)
+		do
+			local mlines = {}
+			for i = 1, 30 do
+				mlines[i] = string.format("line %d 日本語テスト ち 梯 한국어", i)
+			end
+			vim.api.nvim_buf_set_lines(0, 0, -1, false, mlines)
+			vim.cmd("vsplit")
+			local function win_span_set(st)
+				local t = {}
+				for _, mm in ipairs(st.results) do
+					t[#t + 1] = mm.win .. ":" .. mm.pos[1] .. ":" .. mm.pos[2] .. ":" .. mm.end_pos[2]
+				end
+				table.sort(t)
+				return table.concat(t, ",")
+			end
+			local base = { pattern = "ti", labels = "asdfghjkl", search = { mode = fc.make_mix_mode(langs_r, fc.config.force_keys) }, labeler = function() end }
+			local st_default = State.new(vim.tbl_deep_extend("force", base, { matcher = nil }))
+			local st_rust = State.new(vim.tbl_deep_extend("force", base, { matcher = rust.matcher(langs_r) }))
+			ok(win_span_set(st_rust) == win_span_set(st_default), "multi-window results match the default searcher")
+			vim.cmd("close")
+		end
+
+		-- wrap/forward parity: flash filters matcher output by from/to
+		-- itself, so the rust path must match the default searcher under
+		-- restricted ranges too (cursor mid-line, matches on both sides)
+		do
+			vim.api.nvim_buf_set_lines(0, 0, -1, false, { "日本語テスト ちちはち 梯子 tail" })
+			vim.api.nvim_win_set_cursor(0, { 1, 30 })
+			local function cols(st)
+				local t = {}
+				for _, mm in ipairs(st.results) do
+					t[#t + 1] = mm.pos[2]
+				end
+				return table.concat(t, ",")
+			end
+			for _, wrap in ipairs({ true, false }) do
+				local base_w = {
+					pattern = "ti",
+					labels = "asdfghjkl",
+					search = { mode = fc.make_mix_mode(langs_r, fc.config.force_keys), wrap = wrap },
+					labeler = function() end,
+				}
+				local dv = State.new(vim.tbl_deep_extend("force", base_w, { matcher = nil }))
+				local dr = State.new(vim.tbl_deep_extend("force", base_w, { matcher = rust.matcher(langs_r) }))
+				ok(cols(dr) == cols(dv), string.format("wrap=%s: rust spans match default searcher (%s)", tostring(wrap), cols(dr)))
+			end
+			vim.api.nvim_win_set_cursor(0, { 1, 0 })
+		end
+	else
+		print("note: rust binary not built, skipping rust path tests")
+	end
+end
+
+-- public API surface: remote() entry (shared build_opts incl. rust
+-- matcher + patches) and the flash-zh compat shim
+do
+	vim.api.nvim_buf_set_lines(0, 0, -1, false, { "日本語テスト ち 梯" })
+	vim.api.nvim_input("<esc>") -- prefed: the remote loop exits on it
+	local ok_remote, err_remote = pcall(function()
+		fc.remote({})
+	end)
+	ok(ok_remote, "fc.remote() runs through the shared opts path (" .. tostring(err_remote) .. ")")
+
+	local shim = require("flash-zh")
+	ok(type(shim.jump) == "function" and type(shim.remote) == "function" and type(shim.setup) == "function",
+		"flash-zh shim still forwards the public API")
+	ok(shim == fc, "shim returns the same module table")
+end
+
 -- ---------------------------------------------------------------------------
 -- performance: worst-case long inputs
 

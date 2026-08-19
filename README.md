@@ -112,6 +112,10 @@ require("flash-cjk").jump({ langs = { cn = true, jp = true, original = false } }
 - 元音单字母段(아=a、이=i、오=o…)在输入中间位置有效,与日语元音规则一致:`ai` → 아이,`oi` → 오이。
 - `alpha_mixing = false`(性能选项):默认为 `true`,保留"字母与语言段混排"的解释(如 `nihao` 的 n+i+ha+o 变体),是原版 flash-zh 语义;设为 `false` 后只保留纯英文链与纯语言链,三语长输入(4+ 字母)的最差延迟约降低 40-60%,代价是混排目标的可达性。按需开启。
 
+### 已知限制:macOS 文件名的 NFD 谚文
+
+macOS 文件系统存储的韩文文件名是 NFD 分解形式(jamo 序列,如 `ㅎ+ㅏ+ㄴ` 而非预组合的 `한`),两种匹配路径(正则与 Rust)都只匹配 NFC 预组合音节。常规代码/文档缓冲区内容是 NFC,不受影响;若需在 oil/netrw 等文件名缓冲区跳转韩文,此为已知限制。
+
 ### 日语匹配规则
 
 - 汉字:使用 [Unicode Unihan](https://www.unicode.org/charts/unihan.html) 的 `kJapanese`/`kJapaneseOn`/`kJapaneseKun` 读音(音读+训读),按罗马音前缀匹配,前缀最长 3 个字母(`n` / `ni` / `nic` 均可命中 日)。
@@ -145,10 +149,22 @@ require("flash-cjk").jump({ langs = { cn = true, jp = true, original = false } }
     }
     ```
 
+## Rust 加速(可选)
+
+内置一个 Rust 原生匹配器,构建一次后自动启用,长输入每键延迟从 55-80ms 降到 1-3ms(对比 vim 正则路径 3.8x-76x):
+
+```sh
+cd rust && cargo build --release
+```
+
+二进制不存在或调用失败时自动回退到纯 Lua(vim 正则)路径,行为完全一致(有逐项严格交叉验证保障)。详见 [rust/README.md](rust/README.md)。
+
 ## 测试
 
 ```sh
-nvim --headless +"lua dofile('tests/run.lua')" +qa!
+nvim --headless +"lua dofile('tests/run.lua')" +qa!        # 功能 + 集成 + 端到端
+nvim --headless -l tests/cross_validate_rust.lua            # Rust 与 vim 正则严格交叉验证
+cd rust && cargo test && cargo clippy && cargo fmt --check  # Rust 单元 + benchmark
 ```
 
 首次运行会自动克隆 flash.nvim 到 `.deps/`。
@@ -160,6 +176,7 @@ nvim --headless +"lua dofile('tests/run.lua')" +qa!
 ```sh
 uv run scripts/gen_jp_data.py            # 自动下载 Unihan.zip
 uv run scripts/gen_jp_data.py path/to/Unihan_Readings.txt
+nvim -l scripts/export_rs.lua            # 同步再生成 Rust 侧数据(rust/data/),避免两侧漂移
 ```
 
 ## 感谢
