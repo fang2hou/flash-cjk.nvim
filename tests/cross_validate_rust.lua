@@ -13,6 +13,21 @@ if not rust.available() then
 	return
 end
 
+-- Route every rust.search through the persistent server transport
+-- when possible, so the strict parity + fuzz below exercise the UDS
+-- path end to end (the same transport live keystrokes use).
+if vim.fn.has("unix") == 1 then
+	vim.env.XDG_RUNTIME_DIR = (vim.env.TMPDIR or "/tmp") .. "/fcjk-xval-" .. vim.uv.os_getpid()
+	rust.reset_server_for_test()
+	rust.warmup()
+	assert(vim.wait(4000, function()
+		return rust.server_ready()
+	end, 10), "server transport failed to warm up")
+	print("transport: server (UDS)")
+else
+	print("transport: spawn (no UDS on this platform)")
+end
+
 local langs = { zhcn = true, ja = true, ko = true, en = true }
 
 local lines = {

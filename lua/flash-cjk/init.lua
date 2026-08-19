@@ -77,6 +77,8 @@ local function build_opts(langs, opts)
 	local rust_ok, rust = pcall(require, "flash-cjk.rust")
 	if rust_ok and rust.available() then
 		defaults.matcher = rust.matcher(langs)
+		-- warm the persistent server (async, no-op without Unix/binary)
+		rust.warmup()
 	end
 	return vim.tbl_deep_extend("force", defaults, opts)
 end

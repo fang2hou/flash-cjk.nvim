@@ -44,6 +44,16 @@ if no_rust then
 end
 ok(rust.available() ~= no_rust, "rust path: availability matches requested mode")
 
+-- warm the persistent server before the jumps so the transport under
+-- test is deterministic (live usage warms on the first jump)
+if not no_rust then
+	rust.warmup()
+	vim.wait(2000, function()
+		return rust.server_ready()
+	end, 10)
+end
+
+
 -- 2. Real jump in a real buffer, driven through prefed typeahead (the
 -- flash loop consumes nvim_input-queued keys, same technique as
 -- tests/run.lua). last_state captures the flash state via a labeler
@@ -209,6 +219,15 @@ if not no_rust then
     end
     ok(plausible, "nil-opts bounds: every match sits on a plausible match start")
   end
+end
+
+-- server mode: the jumps above ran through the persistent server
+-- (warmed before them); parity with the fallback phase is asserted by
+-- run.sh
+if not no_rust then
+	ok(rust.server_ready(), "server mode: session connection open after jumps")
+	local addr = rust.server_addr()
+	ok(addr ~= nil and vim.uv.fs_stat(addr) ~= nil, "server mode: socket exists")
 end
 
 finish()
