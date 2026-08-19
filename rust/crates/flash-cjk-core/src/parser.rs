@@ -6,6 +6,8 @@
 use crate::charset::CharSet;
 use crate::data::data;
 
+include!("data/punct.rs");
+
 /// Language flags for one search.
 #[derive(Debug, Clone, Copy)]
 pub struct Langs {
@@ -95,14 +97,9 @@ pub fn parse_forced(pattern: &str) -> (String, Option<char>) {
 
 /// Punctuation classes per language (mirror of the Lua comma tables).
 fn comma_classes(langs: &Langs) -> Vec<(char, CharSet)> {
-    // build from the character strings of the Lua tables
-    let cn = [
-        ".。", "\\[【", "\\]】", ",，", "?？", ":：", ";；", "'‘’", "\"“”",
-    ];
-    let jp = [",、", ".。", "\\[「『", "\\]」』", "?？", "!！", "-ー‐"];
-    let mut out: Vec<(char, CharSet)> = Vec::new();
-    let merge = |out: &mut Vec<(char, CharSet)>, key: char, chars: &str| {
-        let set = CharSet::from_chars(&chars.replace('\\', ""));
+    fn merge(out: &mut Vec<(char, CharSet)>, entry: &(&str, &str)) {
+        let key = entry.0.chars().next().expect("single-char punct key");
+        let set = CharSet::from_chars(&entry.1.replace('\\', ""));
         match out.iter_mut().find(|(k, _)| *k == key) {
             Some((_, existing)) => {
                 let CharSet::Sorted(a) = existing else { return };
@@ -115,35 +112,16 @@ fn comma_classes(langs: &Langs) -> Vec<(char, CharSet)> {
             }
             None => out.push((key, set)),
         }
-    };
-    let cn_map = [
-        ('.', &cn[0]),
-        ('[', &cn[1]),
-        (']', &cn[2]),
-        (',', &cn[3]),
-        ('?', &cn[4]),
-        (':', &cn[5]),
-        (';', &cn[6]),
-        ('\'', &cn[7]),
-        ('"', &cn[8]),
-    ];
+    }
+    let mut out: Vec<(char, CharSet)> = Vec::new();
     if langs.cn {
-        for (k, v) in cn_map {
-            merge(&mut out, k, v);
+        for entry in PUNCT_CN {
+            merge(&mut out, entry);
         }
     }
-    let jp_map = [
-        (',', &jp[0]),
-        ('.', &jp[1]),
-        ('[', &jp[2]),
-        (']', &jp[3]),
-        ('?', &jp[4]),
-        ('!', &jp[5]),
-        ('-', &jp[6]),
-    ];
     if langs.jp {
-        for (k, v) in jp_map {
-            merge(&mut out, k, v);
+        for entry in PUNCT_JP {
+            merge(&mut out, entry);
         }
     }
     out

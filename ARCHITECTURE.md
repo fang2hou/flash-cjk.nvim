@@ -16,7 +16,14 @@ input letter.
 
 ## Codebase Map
 
-- `init.lua` — segmentation parser, language modes, punctuation maps, language-lock markers, prompt/input patches, public API (`setup`/`jump`/`remote`)
+- `init.lua` — public API (`setup`/`jump`/`remote`) and orchestration; re-exports
+  the config/match helpers tests and users rely on
+- `config.lua` — configuration defaults, scheme registry, language-flag
+  resolution (no flash.nvim dependency)
+- `match.lua` — matching domain: segmentation parser, punctuation classes,
+  language-lock markers, mixed-mode compiler
+- `patches.lua` — flash.nvim patches (C-c dispatch, prompt lock display)
+- `util.lua` — shared helpers
 - `labeler.lua` — flash labeler: next-letter prediction (from spellings or the Rust matcher's per-match predictions), skip-set, monotonic label pool
 - `rust.lua` — bridge to the native binary: per-keystroke spawn, JSON protocol, fallback circuit breaker to the vim-regex path
 - data modules (`pinyin.lua`, `flypy.lua`, `jp.lua`, `ko.lua`, `jp_data.lua`) — char-class tables and per-language pattern helpers; `jp_data.lua` is generated
@@ -34,9 +41,11 @@ What must remain true about the architecture:
   order wins, spans never overlap). Enforced by `tests/cross_validate_rust.lua`
   and the e2e parity check; any matcher change updates both paths.
 - **Data single source**: the Lua tables are the source of truth.
-  `jp_data.lua` is generated from Unihan (`scripts/gen_jp_data.py`);
-  `rust/data/` is generated from the Lua tables (`scripts/export_rs.lua`).
-  Generated files are never hand-edited.
+  `jp_data.lua` is generated from Unihan (`scripts/gen_jp_data.py`); every
+  Rust static table — Chinese, Japanese, Korean jamo and punctuation — is
+  generated from the Lua tables by `scripts/export_rs.lua` into `rust/data/`
+  and `rust/crates/flash-cjk-core/src/data/`. Generated files are never
+  hand-edited.
 - **Optional native path**: the binary's absence or repeated failure must
   transparently fall back to the vim-regex path with identical behavior.
   The labeler works unchanged on either path.

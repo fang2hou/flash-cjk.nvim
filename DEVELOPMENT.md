@@ -46,8 +46,11 @@ cargo build --release --manifest-path rust/Cargo.toml   # native matcher binary 
 
 ## Layout
 
-- `lua/flash-cjk/` — plugin core: segmentation parser and language modes (`init.lua`), labeler, native bridge, data modules
-- `rust/` — optional native matcher (core lib and JSON binary); `rust/data/` generated
+- `lua/flash-cjk/` — plugin core: public API and orchestration (`init.lua`),
+  config state (`config.lua`), matching domain (`match.lua`), flash patches,
+  labeler, native bridge, data modules
+- `rust/` — optional native matcher (core lib and JSON binary); generated
+  data in `rust/data/` and `rust/crates/flash-cjk-core/src/data/`
 - `tests/` — behavior suite, rust↔vim strict cross-validation, e2e repro
 - `scripts/` — data generators
 

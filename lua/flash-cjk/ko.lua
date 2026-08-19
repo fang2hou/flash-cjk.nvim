@@ -88,6 +88,17 @@ local T_KEYS = {
 	"v", "g",
 }
 
+-- Exported for scripts/export_rs.lua, which mirrors these tables into
+-- Rust; the Lua arrays remain the single source of truth.
+M.jamo = {
+	l_roma = L_ROMA,
+	v_roma = V_ROMA,
+	t_roma = T_ROMA,
+	l_keys = L_KEYS,
+	v_keys = V_KEYS,
+	t_keys = T_KEYS,
+}
+
 -- ------------------------------------------------------------------
 -- prefix tables: romaji / key prefix -> regex range class
 
