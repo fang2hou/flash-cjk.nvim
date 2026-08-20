@@ -40,7 +40,7 @@ local function ok(cond, msg)
 		passed = passed + 1
 	else
 		failed = failed + 1
-		print("FAIL: " .. msg)
+		io.stderr:write("FAIL: " .. msg .. "\n")
 	end
 end
 
@@ -132,14 +132,14 @@ ok(matches(pure, "niho", "日本"), "pure: niho matches 日本")
 
 -- mid-input language forcing (C-p / C-n / C-k markers)
 ok(
-	fc.parse_forced("ti\x01") == "ti" and select(2, fc.parse_forced("ti\x01")) == "zhcn",
-	"parse_forced: cn marker"
+	fc.parse_filter("ti\x01") == "ti" and select(2, fc.parse_filter("ti\x01")) == "zhcn",
+	"parse_filter: cn marker"
 )
-ok(select(2, fc.parse_forced("ti\x02")) == "ja", "parse_forced: jp marker")
-ok(select(2, fc.parse_forced("ti\x04")) == "ko", "parse_forced: ko marker")
-ok(select(2, fc.parse_forced("ti\x05")) == "en", "parse_forced: en marker")
-ok(select(2, fc.parse_forced("ti\x01\x02")) == "ja", "parse_forced: rightmost marker wins")
-ok(select(2, fc.parse_forced("ti")) == nil, "parse_forced: no marker")
+ok(select(2, fc.parse_filter("ti\x02")) == "ja", "parse_filter: jp marker")
+ok(select(2, fc.parse_filter("ti\x04")) == "ko", "parse_filter: ko marker")
+ok(select(2, fc.parse_filter("ti\x05")) == "en", "parse_filter: en marker")
+ok(select(2, fc.parse_filter("ti\x01\x02")) == "ja", "parse_filter: rightmost marker wins")
+ok(select(2, fc.parse_filter("ti")) == nil, "parse_filter: no marker")
 ok(matches(trilingual, "ti", "ち"), "ti matches ち by default")
 ok(not matches(trilingual, "ti\x01", "ち"), "C-c lock: ti no longer matches ち")
 ok(matches(trilingual, "ti\x01", "梯"), "C-c lock: ti still matches pinyin 梯")
@@ -161,7 +161,7 @@ ok(not matches(ja_only, "r", "人"), "jp-only: pinyin r does not match 人")
 ok(matches(ja_only, "hi", "人"), "jp-only: hi matches 人 (hito)")
 ok(not matches(zh_only, "ni", "に"), "zh-only: ni does not match kana に")
 ok(matches(zh_only, "ni", "你"), "zh-only: ni matches 你")
--- per-jump force_keys: mode must honor the jump-specific keys
+-- per-jump filter_keys: mode must honor the jump-specific keys
 local per_jump = fc.make_mix_mode(
 	{ zhcn = true, ja = true, ko = true, en = true },
 	{ zhcn = "<C-d>" }
@@ -173,7 +173,7 @@ ok(
 )
 -- empty marker set must not crash
 ok(
-	fc.parse_forced("ti", { zhcn = false, ja = false, ko = false }) == "ti",
+	fc.parse_filter("ti", { zhcn = false, ja = false, ko = false }) == "ti",
 	"all keys disabled: no crash, no strip"
 )
 ok(not matches(zh_only, "kyo", "京"), "zh-only: kyo does not match 京")
@@ -297,36 +297,45 @@ end
 ok(hit_ti_cn, "forced lock pattern still finds pinyin matches")
 ok(not hit_kana, "forced lock pattern drops Japanese matches")
 
--- force_keys are configurable: remap cn to <C-d>, then verify and restore
+-- filter_keys are configurable: remap cn to <C-d>, then verify and restore
 fc.setup({
 	languages = {
-		zhcn = { force_key = false },
-		ja = { force_key = false },
-		ko = { force_key = false },
+		zhcn = { filter_key = false },
+		ja = { filter_key = false },
+		ko = { filter_key = false },
 	},
 })
-ok(fc.parse_forced("ti\x01") == "ti\x01", "all locks disabled: markers not stripped")
-ok(select(2, fc.parse_forced("ti\x01")) == nil, "all locks disabled: no forced lang")
+ok(fc.parse_filter("ti\x01") == "ti\x01", "all locks disabled: markers not stripped")
+ok(select(2, fc.parse_filter("ti\x01")) == nil, "all locks disabled: no forced lang")
 fc.setup({
 	languages = {
-		zhcn = { force_key = "<C-c>" },
-		ja = { force_key = "<C-j>" },
-		ko = { force_key = "<C-k>" },
+		zhcn = { filter_key = "<C-c>" },
+		ja = { filter_key = "<C-j>" },
+		ko = { filter_key = "<C-k>" },
 	},
 }) -- restore defaults
 do
 	local State = require("flash.state")
 	vim.api.nvim_buf_set_lines(0, 0, -1, false, { "日本語テスト ちちはち 梯子" })
-	local fired = false
-	local keys = cfg.force_keys(fc.config.languages)
+	require("flash-cjk.patches").get_char_patch()
+	local keys = cfg.filter_keys(fc.config.languages)
 	local mode_e2e = fc.make_mix_mode(fc.resolve_langs(nil), keys)
+	local fired = false
 	local actions_e2e = {}
+	local function lock(state, marker)
+		-- mirrors build_opts: a new lock replaces any previous one
+		local clean = fc.parse_filter(state.pattern.pattern)
+		state:update({ pattern = clean .. marker })
+		return true
+	end
 	local ja_key = vim.api.nvim_replace_termcodes(keys.ja, true, true, true)
 	actions_e2e[ja_key] = function(state, _char)
 		fired = true
-		-- mirrors build_opts: pressed byte is converted to the internal marker
-		state:update({ pattern = state.pattern:extend("\x02") })
-		return true
+		return lock(state, "\x02")
+	end
+	local ko_key = vim.api.nvim_replace_termcodes(keys.ko, true, true, true)
+	actions_e2e[ko_key] = function(state, _char)
+		return lock(state, "\x04")
 	end
 	local state_e2e = State.new({
 		pattern = "",
@@ -337,14 +346,16 @@ do
 			require("flash-cjk.labeler").new(s, fc.resolve_langs(nil), keys):update()
 		end,
 	})
-	vim.api.nvim_input("ti<C-j><esc>")
+	-- prefed <C-c> sets the interrupt flag before the loop can read the
+	-- queued text, so the override sequence uses the two plain keys
+	vim.api.nvim_input("ti<C-j><C-k><esc>")
 	state_e2e:loop()
 	ok(fired, "end-to-end: C-j action fires inside flash loop")
 	ok(
-		state_e2e.pattern.pattern == "ti\x02",
-		"end-to-end: C-j newline converted to buffer-safe marker"
+		state_e2e.pattern.pattern == "ti\x04",
+		"end-to-end: new lock replaces the previous one (only \x04 left)"
 	)
-	ok(#state_e2e.results == 3, "end-to-end: locked-jp finds the three ち")
+	ok(#state_e2e.results == 0, "end-to-end: ko lock finds no Japanese-only matches")
 end
 
 -- prompt shows lock markers as readable tags (display-only transform)
@@ -358,11 +369,11 @@ do
 	ok(Prompt.prompt == "⚡ti [中]", "prompt displays [中] for cn lock")
 	Prompt.set("dk\x04\x02", false)
 	ok(
-		Prompt.prompt == "⚡dk [韩] [日]",
-		"prompt displays multiple locks (rightmost shown last)"
+		Prompt.prompt == "⚡dk [한] [日]",
+		"prompt displays multiple markers (rightmost shown last)"
 	)
 	Prompt.set("ti\x05", false)
-	ok(Prompt.prompt == "⚡ti [英]", "prompt displays [英] for en lock")
+	ok(Prompt.prompt == "⚡ti [EN]", "prompt displays [EN] for en lock")
 end
 
 -- rust fast path: full state with the binary-backed matcher must agree
@@ -372,7 +383,7 @@ do
 		local State = require("flash.state")
 		vim.api.nvim_buf_set_lines(0, 0, -1, false, { "日本語テスト ちちはち 梯子" })
 		local langs_r = { zhcn = true, ja = true, ko = true, en = true }
-		local default_keys = cfg.force_keys(fc.config.languages)
+		local default_keys = cfg.filter_keys(fc.config.languages)
 		local state_r = State.new({
 			pattern = "ti",
 			labels = "asdfghjklqwertyuiopzxcvbnm",
@@ -643,30 +654,35 @@ end
 do
 	local saved = vim.deepcopy(fc.config)
 	fc.setup({ languages = { zhcn = true } })
-	ok(
-		fc.config.languages.zhcn.enabled and fc.config.languages.zhcn.scheme == "xiaohe",
-		"setup: true shorthand enables with the default scheme"
-	)
+	ok(fc.config.languages.zhcn.enabled, "setup: true shorthand enables the language")
 	fc.setup({ languages = { zhcn = false } })
 	ok(fc.config.languages.zhcn.enabled == false, "setup: false shorthand disables the language")
-	fc.setup({ languages = { ja = { force_key = "<C-d>" } } })
+	fc.setup({ languages = { ja = { filter_key = "<C-d>" } } })
 	ok(
-		fc.config.languages.ja.force_key == "<C-d>" and fc.config.languages.ja.scheme == "roma",
+		fc.config.languages.ja.filter_key == "<C-d>",
 		"setup: field-level deep merge keeps unspecified fields"
 	)
 	ok(
-		fc.config.languages.ko.force_key == "<C-k>",
+		fc.config.languages.ko.filter_key == "<C-k>",
 		"setup: deep merge leaves other languages alone"
 	)
-	fc.setup({ languages = { ko = { scheme = "roma" } } })
-	ok(fc.config.languages.ko.scheme == "roma", "setup: scheme field stored")
+	fc.setup({ languages = { en = { filter_key = "<M-e>" } } })
 	ok(
-		pcall(fc.setup, { languages = { zhcn = { scheme = "qwerty" } } }) == false,
-		"setup: unknown scheme errors"
+		fc.config.languages.en.filter_key == "<M-e>" and fc.config.languages.en.enabled,
+		"setup: built-in en merges onto its built-in defaults"
+	)
+	fc.config = vim.deepcopy(saved)
+	ok(
+		cfg.filter_keys(fc.config.languages).en == "<C-e>",
+		"defaults: en keeps its built-in filter_key"
 	)
 	ok(
-		pcall(fc.setup, { languages = { en = { scheme = "roma" } } }) == false,
-		"setup: en has no scheme concept"
+		vim.inspect(fc.config.priority) == vim.inspect({ "zhcn", "ja", "ko" }),
+		"defaults: priority { zhcn, ja, ko }"
+	)
+	ok(
+		pcall(fc.setup, { languages = { zhcn = { filter_key = 42 } } }) == false,
+		"setup: filter_key must be a string or false"
 	)
 	ok(pcall(fc.setup, { languages = { zhcn = 42 } }) == false, "setup: wrong entry type errors")
 	ok(
@@ -800,7 +816,10 @@ do
 	ok(pcall(fc.setup, { priority = { "xx" } }) == false, "setup: unknown priority code errors")
 	ok(pcall(fc.setup, { priority = "ja" }) == false, "setup: non-array priority errors")
 	fc.config = saved
-	ok(fc.config.priority == nil, "config restore: priority back to unset")
+	ok(
+		vim.inspect(fc.config.priority) == vim.inspect({ "zhcn", "ja", "ko" }),
+		"config restore: default priority back"
+	)
 end
 
 print(string.format("%d passed, %d failed", passed, failed))

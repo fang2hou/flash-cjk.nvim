@@ -33,10 +33,8 @@ ok(
 )
 
 ok(
-	fc.config.languages.zhcn.scheme == "xiaohe"
-		and fc.config.languages.ja.scheme == "roma"
-		and fc.config.languages.ko.scheme == "roma",
-	"opts: lazy opts normalized into schemes"
+	fc.config.languages.zhcn.filter_key == "<C-c>" and fc.config.languages.ja.filter_key == "<C-j>",
+	"opts: lazy opts normalized with filter keys"
 )
 
 local rust = require("flash-cjk.rust")

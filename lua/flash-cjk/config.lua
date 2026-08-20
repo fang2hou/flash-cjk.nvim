@@ -1,46 +1,38 @@
--- Configuration state: defaults, the scheme registry and language-flag
--- resolution. No flash.nvim dependency -- setup() writes into M.config
--- and the mix mode is rebuilt from it on change. Field semantics are
--- documented in the README (Language configuration, Mixed input).
+-- Configuration state: defaults and language-flag resolution. No
+-- flash.nvim dependency -- setup() writes into M.config and the mix
+-- mode is rebuilt from it on change. Field semantics are documented
+-- in the README.
 
 local M = {}
 
 local LANGS = { "zhcn", "ja", "ko", "en" }
 
+-- en stays built-in: absent from the default languages table, still
+-- configurable through setup(), literal-matching only.
+local EN_DEFAULT = { enabled = true, filter_key = "<C-e>" }
+
 M.config = {
 	languages = {
-		zhcn = { enabled = true, scheme = "xiaohe", force_key = "<C-c>" },
-		ja = { enabled = true, scheme = "roma", force_key = "<C-j>" },
-		ko = { enabled = true, scheme = "roma", force_key = "<C-k>" },
-		en = { enabled = true, force_key = "<C-e>" },
+		zhcn = { enabled = true, filter_key = "<C-c>" },
+		ja = { enabled = true, filter_key = "<C-j>" },
+		ko = { enabled = true, filter_key = "<C-k>" },
 	},
+	priority = { "zhcn", "ja", "ko" },
 	mixed_input = true,
 }
 
--- Registered schemes per language; each language currently ships
--- exactly one, so the string only validates and records the choice.
-local SCHEMES = {
-	zhcn = { default = "xiaohe", xiaohe = true },
-	ja = { default = "roma", roma = true },
-	ko = { default = "roma", roma = true },
-}
-
----Normalizes one languages[lang] value: true -> enabled with the
----default scheme, false -> disabled, a table -> validated fields.
----Unknown fields are ignored (forward compatibility).
+---Normalizes one languages[lang] value: true -> enabled, false ->
+---disabled, a table -> validated fields. Unknown fields are ignored
+---(forward compatibility).
 ---@param lang string
 ---@param value boolean|table
----@return table normalized { enabled?, scheme?, force_key? }
+---@return table normalized { enabled?, filter_key? }
 function M.normalize_language(lang, value)
 	if not vim.list_contains(LANGS, lang) then
 		error("flash-cjk: unknown language code: " .. tostring(lang))
 	end
 	if value == true then
-		local normalized = { enabled = true }
-		if SCHEMES[lang] then
-			normalized.scheme = SCHEMES[lang].default
-		end
-		return normalized
+		return { enabled = true }
 	elseif value == false then
 		return { enabled = false }
 	elseif type(value) ~= "table" then
@@ -53,22 +45,28 @@ function M.normalize_language(lang, value)
 				error(("flash-cjk: languages[%s].enabled must be a boolean"):format(lang))
 			end
 			normalized.enabled = field_value
-		elseif field == "scheme" then
-			if not SCHEMES[lang] then
-				error(("flash-cjk: languages[%s] has no scheme concept"):format(lang))
-			end
-			if type(field_value) ~= "string" or not SCHEMES[lang][field_value] then
-				error(("flash-cjk: unknown %s scheme %q"):format(lang, tostring(field_value)))
-			end
-			normalized.scheme = field_value
-		elseif field == "force_key" then
+		elseif field == "filter_key" then
 			if type(field_value) ~= "string" and field_value ~= false then
-				error(("flash-cjk: languages[%s].force_key must be a string or false"):format(lang))
+				error(
+					("flash-cjk: languages[%s].filter_key must be a string or false"):format(lang)
+				)
 			end
-			normalized.force_key = field_value
+			normalized.filter_key = field_value
 		end
 	end
 	return normalized
+end
+
+---Base entry a language's setup() merge starts from: the built-in
+---defaults for en, an empty table elsewhere (existing entries merge
+---onto themselves).
+---@param lang string
+---@return table base
+function M.language_base(lang)
+	if lang == "en" then
+		return EN_DEFAULT
+	end
+	return {}
 end
 
 ---Boolean language flags for a languages config table, as consumed by
@@ -81,27 +79,28 @@ function M.lang_flags(languages)
 		zhcn = languages.zhcn.enabled,
 		ja = languages.ja.enabled,
 		ko = languages.ko.enabled,
-		en = languages.en.enabled,
+		en = (languages.en or EN_DEFAULT).enabled,
 		mixed_input = M.config.mixed_input,
 	}
 end
 
----Flat force-key map derived from a languages config table, as
+---Flat filter-key map derived from a languages config table, as
 ---consumed by make_mix_mode and the labeler.
 ---@param languages table
 ---@return table keys lang -> key string (or false/unset)
-function M.force_keys(languages)
+function M.filter_keys(languages)
 	local keys = {}
 	for _, lang in ipairs(LANGS) do
-		keys[lang] = languages[lang].force_key
+		local entry = languages[lang] or EN_DEFAULT
+		keys[lang] = entry.filter_key
 	end
 	return keys
 end
 
 ---Resolves a jump/remote language argument into boolean language
 ---flags. nil or {} -> the setup-enabled set; otherwise the array fully
----decides the enabled set for this jump (schemes fall back to each
----language's default) and overrides the setup switches.
+---decides the enabled set for this jump and overrides the setup
+---switches.
 ---@param codes string[]? language codes, e.g. { "zhcn", "en" }
 ---@return table langs boolean flags
 function M.resolve_langs(codes)

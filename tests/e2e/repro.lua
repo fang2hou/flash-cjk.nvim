@@ -68,10 +68,9 @@ require("lazy").setup({
 			},
 			opts = {
 				languages = {
-					zhcn = { force_key = "<C-c>" }, -- default: enabled, scheme "xiaohe"
-					ja = { force_key = "<C-j>" }, -- default scheme: "roma"
-					ko = { force_key = "<C-k>" },
-					en = { force_key = "<C-e>" }, -- en has no scheme concept
+					zhcn = { filter_key = "<C-c>" },
+					ja = { filter_key = "<C-j>" },
+					ko = { filter_key = "<C-k>" },
 				},
 				mixed_input = true,
 			},

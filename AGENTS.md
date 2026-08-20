@@ -90,13 +90,13 @@ Ask first:
 
 ## Confirmed Language Policy
 
-| Item                      | Value                                                                                           |
-| ------------------------- | ----------------------------------------------------------------------------------------------- |
-| Conversation              | follows the user                                                                                |
-| Code / comments / commits | English                                                                                         |
-| README                    | English canonical (`README.md`) + `README.zh.md` / `README.ja.md` / `README.ko.md` translations |
-| UI strings                | in-prompt lock tags `[中] [日] [韩] [英]` are intentional product strings                       |
-| Tone                      | technical, concise                                                                              |
+| Item                      | Value                                                                                                       |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Conversation              | follows the user                                                                                            |
+| Code / comments / commits | English                                                                                                     |
+| README                    | English canonical (`README.md`) + `README.zh.md` / `README.ja.md` / `README.ko.md` translations             |
+| UI strings                | in-prompt lock tags `[中] [日] [한] [EN]` (each language in its own script) are intentional product strings |
+| Tone                      | technical, concise                                                                                          |
 
 Do not infer UI or doc language from conversation language.
 
