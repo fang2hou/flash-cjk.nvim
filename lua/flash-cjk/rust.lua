@@ -423,7 +423,7 @@ local function encode_req(pattern, lines, langs)
 			ja = langs.ja and true or false,
 			ko = langs.ko and true or false,
 			en = langs.en and true or false,
-			alpha_mixing = langs.alpha_mixing ~= false,
+			mixed_input = langs.mixed_input ~= false,
 		},
 	})
 end

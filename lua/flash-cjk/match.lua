@@ -161,7 +161,7 @@ local function parser(str, prefix, ctx)
 	elseif string.match(firstchar, "%l") then
 		local results = {}
 		if secondchar == "" then
-			if ctx.langs.en and (ctx.langs.alpha_mixing ~= false or prefix._alpha ~= false) then
+			if ctx.langs.en and (ctx.langs.mixed_input ~= false or prefix._alpha ~= false) then
 				local p1 = copy(prefix)
 				p1[#p1 + 1] = { str = firstchar, type = "alpha" }
 				results = merge_table(results, parser("", p1, ctx))
@@ -245,19 +245,19 @@ local function parser(str, prefix, ctx)
 					results = merge_table(results, parser(string.sub(str, 2), pk, ctx))
 				end
 			end
-			if ctx.langs.en and (ctx.langs.alpha_mixing ~= false or prefix._alpha ~= false) then
+			if ctx.langs.en and (ctx.langs.mixed_input ~= false or prefix._alpha ~= false) then
 				local p = copy(prefix)
 				p[#p + 1] = { str = firstchar, type = "alpha" }
 				results = merge_table(results, parser(string.sub(str, 2), p, ctx))
 			end
 			return results
-		elseif ctx.langs.en and (ctx.langs.alpha_mixing ~= false or prefix._alpha ~= false)
+		elseif ctx.langs.en and (ctx.langs.mixed_input ~= false or prefix._alpha ~= false)
 			and vim.list_contains(chars, secondchar)
 		then
 			prefix[#prefix + 1] = { str = firstchar, type = "alpha" }
 			prefix[#prefix + 1] = { str = secondchar, type = "comma" }
 			return parser(string.sub(str, 3), prefix, ctx)
-		elseif ctx.langs.en and (ctx.langs.alpha_mixing ~= false or prefix._alpha ~= false) then
+		elseif ctx.langs.en and (ctx.langs.mixed_input ~= false or prefix._alpha ~= false) then
 			prefix[#prefix + 1] = { str = firstchar, type = "alpha" }
 			prefix[#prefix + 1] = { str = secondchar, type = "other" }
 			return parser(string.sub(str, 3), prefix, ctx)
@@ -340,7 +340,7 @@ local function forced_langs(base, forced)
 		ja = forced == "ja",
 		ko = forced == "ko",
 		en = forced == "en" or base.en,
-		alpha_mixing = base.alpha_mixing,
+		mixed_input = base.mixed_input,
 	}
 end
 

@@ -15,7 +15,7 @@ pub struct Langs {
     pub ja: bool,
     pub ko: bool,
     pub en: bool,
-    pub alpha_mixing: bool,
+    pub mixed_input: bool,
 }
 
 impl Default for Langs {
@@ -25,7 +25,7 @@ impl Default for Langs {
             ja: true,
             ko: true,
             en: true,
-            alpha_mixing: true,
+            mixed_input: true,
         }
     }
 }
@@ -168,7 +168,7 @@ impl<'a> Compiler<'a> {
         let tail4_at = first.len_utf8() + second.len_utf8() + third.len_utf8();
 
         if first.is_ascii_lowercase() {
-            let alpha_allowed = self.langs.en && (self.langs.alpha_mixing || alpha_ok);
+            let alpha_allowed = self.langs.en && (self.langs.mixed_input || alpha_ok);
             if second == '\0' {
                 // last key: alpha / singlepin / jp1 / ko1
                 let f1 = first.to_string();
@@ -390,7 +390,7 @@ pub fn compile(pattern: &str, base: Langs) -> Vec<Alt> {
         ja: m == MARKER_JA,
         ko: m == MARKER_KO,
         en: m == MARKER_EN || base.en,
-        alpha_mixing: base.alpha_mixing,
+        mixed_input: base.mixed_input,
     });
     let mut compiler = Compiler {
         langs,

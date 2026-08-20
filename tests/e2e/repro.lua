@@ -66,7 +66,7 @@ require("lazy").setup({
           ko = { force_key = "<C-k>" },
           en = { force_key = "<C-e>" }, -- en has no scheme concept
         },
-        alpha_mixing = true,
+        mixed_input = true,
       },
     },
   },

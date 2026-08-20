@@ -109,7 +109,7 @@ end
 --   "xiaohe", force_key = "<C-c>" }, ja = ..., ko = ..., en = {
 --   force_key = "<C-e>" } }; entries also accept the true/false
 --   shorthand.
--- @field[opt] opts.alpha_mixing boolean Allow mixing literal letters into language chains.
+-- @field[opt] opts.mixed_input boolean Allow literal letters to follow language segments in one input chain (default true).
 -- @field[opt] opts.priority string[] Language codes in label-assignment
 --   priority order, e.g. { "ja", "zhcn" }: matches reachable through
 --   earlier-listed languages receive their labels first (match sets
@@ -127,8 +127,8 @@ function M.setup(opts)
 			dirty = true
 		end
 	end
-	if type(opts.alpha_mixing) == "boolean" then
-		M.config.alpha_mixing = opts.alpha_mixing
+	if type(opts.mixed_input) == "boolean" then
+		M.config.mixed_input = opts.mixed_input
 		dirty = true
 	end
 	if opts.priority ~= nil then

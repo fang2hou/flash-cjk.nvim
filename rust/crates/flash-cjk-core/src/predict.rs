@@ -225,7 +225,7 @@ mod tests {
             ja: true,
             ko: false,
             en: false,
-            alpha_mixing: true,
+            mixed_input: true,
         };
         let (_, tags) = predict("t", "梯", &langs);
         assert_eq!(tags, vec!["ja"]);

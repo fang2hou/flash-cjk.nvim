@@ -58,7 +58,7 @@ return {{
             ko = {force_key = "<C-k>"},
             en = {force_key = "<C-e>"},         -- en has no scheme concept
         },
-        alpha_mixing = true,
+        mixed_input = true,
     }
 }, {
     "folke/flash.nvim",
@@ -114,7 +114,7 @@ require("flash-cjk").setup({
         ko = {enabled = true, scheme = "roma", force_key = "<C-k>"},
         en = {enabled = true, force_key = "<C-e>"},  -- no scheme concept
     },
-    alpha_mixing = true,
+    mixed_input = true,
     priority = { "ja", "zhcn" },  -- label order: ja matches first
 })
 
@@ -178,18 +178,25 @@ interpretation. `en` has no scheme concept. Even with `en` disabled, digits
 and uppercase still match literally, and input no enabled language can
 interpret (like `n.`) degrades to literal matching.
 
-## Alpha mixing
+## Mixed input
 
-An input can mix literal letters with language segments in one chain: `n`
-read as the literal letter plus `i` as pinyin still composes `ni` → 你, and
-long inputs like `nihao` gain extra mixed-chain interpretations.
+A keystroke chain can be read part literally, part as language codes; the
+flag decides how freely the two interleave within one interpretation.
 
-- On (default): every mixed-chain variant of your input stays reachable.
-- Off (`alpha_mixing = false`): mixed interpretations are dropped — 40–60%
-  lower worst-case latency on long trilingual inputs, at the cost of some
-  mixed-chain reachability.
+- On (default): every mixed interpretation stays reachable — including
+  targets where a literal letter follows a language segment.
+- Off (`mixed_input = false`): an interpretation, once it enters a
+  language segment, can no longer return to literal letters. Literal
+  heads keep working; only the reverse shape drops. Long trilingual
+  inputs lose 40–60% of their worst-case latency (`nini` falls from 59
+  interpretations to 31).
 - Recommendation: keep the default unless long inputs visibly lag while
-  typing — then turn mixing off.
+  typing — then turn it off.
+
+Example (zhcn+ja+en): typing `nn` reaches `日n` — 日 is the romaji prefix
+`n` (nichi), the trailing `n` is literal, a `[language][literal]` chain
+only the default mode keeps. The mirror text `n日` matches in both modes:
+literal letters at the head of a chain are always allowed.
 
 ## FAQ
 

@@ -111,8 +111,8 @@ ok(k1 and k2, "ko.strs(안녕) predicts annyeong and dkssud")
 local ok_sc, err_sc = pcall(ko.self_check)
 ok(ok_sc, "ko.self_check: hand-written facts hold (" .. tostring(err_sc) .. ")")
 
--- alpha_mixing = false: pure chains only, still matches everything CJK
-local pure = fc.make_mix_mode({ zhcn = true, ja = true, ko = true, en = true, alpha_mixing = false })
+-- mixed_input = false: language->literal tails dropped, every pure chain still matches
+local pure = fc.make_mix_mode({ zhcn = true, ja = true, ko = true, en = true, mixed_input = false })
 ok(matches(pure, "kim", "김"), "pure: kim matches 김")
 ok(matches(pure, "dkss", "안녕"), "pure: dkss matches 안녕")
 ok(matches(pure, "niho", "日本"), "pure: niho matches 日本")
