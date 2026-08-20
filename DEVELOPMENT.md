@@ -11,17 +11,17 @@ All tools are managed by mise.
 mise install
 ```
 
-| Tool                | Purpose                           | Managed via |
-| ------------------- | --------------------------------- | ----------- |
-| rust                | Native matcher toolchain          | `mise.toml` |
-| neovim              | Test/runtime host                 | `mise.toml` |
-| python+uv           | Data generators                   | `mise.toml` |
-| stylua              | Lua formatter                     | `mise.toml` |
-| lua-language-server | Lua type checking                 | `mise.toml` |
-| taplo               | TOML formatter                    | `mise.toml` |
-| oxfmt               | Markdown formatter                | `mise.toml` |
-| prek                | Pre-commit hooks                  | `mise.toml` |
-| cocogitto           | Conventional Commits verification | `mise.toml` |
+| Tool                | Purpose                                                   | Managed via |
+| ------------------- | --------------------------------------------------------- | ----------- |
+| rust                | Native matcher toolchain                                  | `mise.toml` |
+| neovim              | Test/runtime host                                         | `mise.toml` |
+| uv                  | Data generator runner (Python 3.14 via `.python-version`) | `mise.toml` |
+| stylua              | Lua formatter                                             | `mise.toml` |
+| lua-language-server | Lua type checking                                         | `mise.toml` |
+| taplo               | TOML formatter                                            | `mise.toml` |
+| oxfmt               | Markdown formatter                                        | `mise.toml` |
+| prek                | Pre-commit hooks                                          | `mise.toml` |
+| cocogitto           | Conventional Commits verification                         | `mise.toml` |
 
 Do not substitute tools without explicit approval (see the guidelines repository's toolchain standards).
 
@@ -95,6 +95,6 @@ Follow the guidelines repository's coding standards. Project-specific rules:
 
 `mise run check` is the entry point for the project's main validation.
 It runs the same checks locally that CI runs — do not maintain separate logic.
-The Lua type-check config is generated at check time (`scripts/gen_luarc.py`
+The Lua type-check config is generated at check time (`scripts/gen_luarc.lua`
 resolves the machine-specific Neovim runtime path); `.luarc.json` is gitignored.
 Hooks: `prek install` once; prek then runs `mise run check` and gitleaks on commit.

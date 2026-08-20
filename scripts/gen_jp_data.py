@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # /// script
-# requires-python = ">=3.14"
+# requires-python = ">=3.12"
 # dependencies = []
 # ///
 """Generate lua/flash-cjk/lang/ja/data.json from the Unicode Unihan database.

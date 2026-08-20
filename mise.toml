@@ -1,6 +1,5 @@
 [tools]
 rust = "stable"
-python = "3.14"
 uv = "latest"
 neovim = "latest"
 prek = "latest"
@@ -35,7 +34,7 @@ run = "stylua --check $(git ls-files '*.lua')"
 [tasks.typecheck]
 hide = true
 run = """
-uv run scripts/gen_luarc.py
+nvim --headless -l scripts/gen_luarc.lua
 lua-language-server --check=. --checklevel=Warning --logpath=build
 """
 
@@ -70,5 +69,5 @@ run = "tests/e2e/run.sh"
 description = "regenerate jp readings from Unihan, then sync rust data from json"
 run = """
 uv run scripts/gen_jp_data.py
-uv run scripts/export_rs.py
+nvim -l scripts/export_rs.lua
 """

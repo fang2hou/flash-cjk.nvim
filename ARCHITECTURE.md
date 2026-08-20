@@ -47,7 +47,7 @@ What must remain true about the architecture:
 - **Data single source**: the JSON dictionaries are the source of truth.
   `lang/ja/data.json` is generated from Unihan (`scripts/gen_jp_data.py`); every
   Rust static table — Chinese, Japanese, Korean jamo and punctuation — is
-  generated from the JSON dictionaries by `scripts/export_rs.py` into
+  generated from the JSON dictionaries by `scripts/export_rs.lua` into
   `rust/data/` and `rust/crates/flash-cjk-core/src/data/`. Generated files
   are never hand-edited.
 - **Optional native path**: the binary's absence or repeated failure must
