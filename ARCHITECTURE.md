@@ -26,7 +26,11 @@ input letter.
 - `util.lua` — shared helpers
 - `labeler.lua` — flash labeler: next-letter prediction (from spellings or the Rust matcher's per-match predictions), skip-set, monotonic label pool
 - `rust.lua` — bridge to the native matcher: persistent UDS server transport (Unix, zero config), per-keystroke spawn fallback, JSON protocol, circuit breaker to the vim-regex path
-- data modules (`zhcnData.lua`, `jaData.lua`, `zhcnRev.lua`, `ja.lua`, `ko.lua`) — char-class tables and per-language pattern helpers; `jaData.lua` is generated
+- `lang/` engine package — per-language matching engines behind one lazy
+  registry (`lang/init.lua`): `zhcn.lua`/`ja.lua`/`ko.lua` implement the
+  same `pattern`/`strs`/`comma` surface over their data
+  (`zhcnData.lua`/`zhcnRev.lua`/`jaData.lua`; the latter is generated);
+  en is the built-in literal fallback domain and has no module
 - `flash-cjk-core` (Rust lib) — charset, parser, DP matcher, prediction; mirrors Lua semantics
 - `flash-cjk-search` (Rust binary) — JSON front for the core: stdin/stdout one-shot mode and a `serve` UDS server mode with connection-based liveness (a client is registered while its session connection is open; the last one out takes the server with it)
 - `tests/` — behavior suite, strict rust↔vim cross-validation and fuzz, LazyVim-style e2e

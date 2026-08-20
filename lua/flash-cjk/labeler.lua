@@ -1,4 +1,4 @@
-local zhcnRev = require("flash-cjk.zhcnRev")
+local lang = require("flash-cjk.lang")
 
 local M = {}
 M.__index = M
@@ -56,18 +56,16 @@ local char_size = require("flash-cjk.util").char_size
 -- All spellings the matched text (plus the character right after it,
 -- so that a pattern covering the match exactly still predicts the next
 -- input letter) could have been typed as.
+local SPELLING_LANGS = { "zhcn", "ja", "ko" } -- attribution order
+
 function M:match_strs(line, start_col, end_col, langs)
 	local size = char_size(line, end_col + 1)
 	local text = string.sub(line, start_col, end_col + size)
 	local strs = {}
-	if langs.zhcn then
-		vim.list_extend(strs, zhcnRev.pinyin(text))
-	end
-	if langs.ja then
-		vim.list_extend(strs, require("flash-cjk.ja").romaji_strs(text))
-	end
-	if langs.ko then
-		vim.list_extend(strs, require("flash-cjk.ko").strs(text))
+	for _, code in ipairs(SPELLING_LANGS) do
+		if langs[code] then
+			vim.list_extend(strs, lang.get(code).strs(text))
+		end
 	end
 	return strs
 end
@@ -105,14 +103,10 @@ function M.match_langs(text, prefix, langs)
 		end
 		return false
 	end
-	if langs.zhcn and extends(zhcnRev.pinyin(text)) then
-		out[#out + 1] = "zhcn"
-	end
-	if langs.ja and extends(require("flash-cjk.ja").romaji_strs(text)) then
-		out[#out + 1] = "ja"
-	end
-	if langs.ko and extends(require("flash-cjk.ko").strs(text)) then
-		out[#out + 1] = "ko"
+	for _, code in ipairs(SPELLING_LANGS) do
+		if langs[code] and extends(lang.get(code).strs(text)) then
+			out[#out + 1] = code
+		end
 	end
 	return out
 end

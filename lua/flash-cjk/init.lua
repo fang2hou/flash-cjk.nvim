@@ -21,6 +21,17 @@ setmetatable(M, {
 	__index = function(_, k)
 		if k == "config" then
 			return config.config
+		elseif k == "mix_mode" then
+			-- built on first access: the plugin itself never needs the
+			-- default mode (build_opts compiles one per jump), and an
+			-- eager build would load every language data table at
+			-- startup. Memoized raw so later reads skip this path.
+			local mode = match.make_mix_mode(
+				config.lang_flags(),
+				config.force_keys(config.config.languages)
+			)
+			rawset(M, "mix_mode", mode)
+			return mode
 		end
 	end,
 	__newindex = function(t, k, v)
@@ -36,9 +47,6 @@ setmetatable(M, {
 local function get_flash()
 	return require("flash")
 end
-
--- Default mixed mode: every enabled language, default force keys.
-M.mix_mode = M.make_mix_mode(config.lang_flags(), config.force_keys(M.config.languages))
 
 local function build_opts(langs)
 	local keys = config.force_keys(M.config.languages)

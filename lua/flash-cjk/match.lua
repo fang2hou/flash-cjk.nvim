@@ -2,26 +2,40 @@
 -- lock markers and the mixed-mode pattern compiler. Independent of
 -- flash.nvim -- init.lua drives these through jump/remote/setup.
 
-local zhcn = require("flash-cjk.zhcnData")
 local config = require("flash-cjk.config")
+local lang = require("flash-cjk.lang")
 
 local M = {}
 
-local ja ---@type table?
+-- Engines resolve lazily through the lang registry: requiring this
+-- module touches no language data table -- the first parse pulls in
+-- exactly the enabled engines.
+local zhcn, ja, ko ---@type table?
+local function get_zhcn()
+	if zhcn == nil then
+		zhcn = lang.get("zhcn")
+	end
+	return zhcn
+end
+
 local function get_ja()
 	if ja == nil then
-		ja = require("flash-cjk.ja")
+		ja = lang.get("ja")
 	end
 	return ja
 end
 
-local ko ---@type table?
 local function get_ko()
 	if ko == nil then
-		ko = require("flash-cjk.ko")
+		ko = lang.get("ko")
 	end
 	return ko
 end
+
+-- Regex escapes for "other" nodes (characters no engine claims):
+-- matcher-generic, deliberately not language data, so a ja/ko/en-only
+-- parse never loads the zhcn engine for it.
+local ESCAPE = { ["\\"] = [[\\]] }
 
 -- Upper bound on the number of pattern interpretations kept per keystroke.
 -- Romaji segments are 1-3 letters long, so the number of possible
@@ -51,7 +65,7 @@ local function comma_map(langs)
 	local map = comma_cache[key]
 	if not map then
 		map = {}
-		local cn_tbl = langs.zhcn and zhcn.comma or {}
+		local cn_tbl = langs.zhcn and get_zhcn().comma or {}
 		local ja_tbl = langs.ja and get_ja().comma or {}
 		for _, src in ipairs({ cn_tbl, ja_tbl }) do
 			for k, v in pairs(src) do
@@ -88,13 +102,13 @@ local function make_nodes(comma)
 			return "[" .. str .. string.upper(str) .. "]"
 		end,
 		pinyin = function(str)
-			return zhcn.char2patterns[str]
+			return get_zhcn().pattern(str)
 		end,
 		comma = function(str)
 			return comma[str]
 		end,
 		singlepin = function(str)
-			return zhcn.char1patterns[str]
+			return get_zhcn().pattern(str)
 		end,
 		jp = function(str)
 			return get_ja().pattern(str)
@@ -103,8 +117,7 @@ local function make_nodes(comma)
 			return get_ko().pattern(str)
 		end,
 		other = function(str)
-			str = zhcn.escape[str] or str
-			return str
+			return ESCAPE[str] or str
 		end,
 	}
 end
@@ -178,7 +191,7 @@ local function parser(str, prefix, ctx)
 			-- interpretation (prefix._alpha): mixed chains multiply the
 			-- alternatives and each giant CJK character class makes vim's
 			-- regex execution measurably slower.
-			if ctx.langs.zhcn and zhcn.char2patterns[firstchar .. secondchar] then
+			if ctx.langs.zhcn and get_zhcn().pattern(firstchar .. secondchar) then
 				local p = copy(prefix)
 				p._alpha = false
 				p[#p + 1] = { str = firstchar .. secondchar, type = "pinyin" }

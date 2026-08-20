@@ -1,4 +1,6 @@
-local zhcn = require("flash-cjk.zhcnData")
+-- Reverse pinyin lookups (character -> spellings) for the labeler's
+-- predictions, built from zhcnData's pattern tables.
+local zhcn = require("flash-cjk.lang.zhcnData")
 
 local M = {}
 

@@ -7,8 +7,9 @@
 -- Every matcher emits code-point *range* classes ([가-깣]) because
 -- Hangul syllables are combinatorially encoded: L*588 + V*28 + T.
 -- Sino-graphic hand-written jamo tables proved error-prone, so the
--- tables below are aligned by 0-based L/V/T index and cross-checked
--- by self_check() at load time.
+-- tables below are aligned by 0-based L/V/T index; the hand-written
+-- facts are verified through M.self_check (called by tests/run.lua) --
+-- never at load time in a user's runtime.
 
 local M = {}
 
@@ -235,7 +236,7 @@ function M.strs(text, cap)
 end
 
 -- ------------------------------------------------------------------
--- self-checks: hand-written facts are asserted, not trusted
+-- self-checks: hand-written facts, asserted by tests/run.lua
 
 local function assert_eq(actual, expected, what)
 	if actual ~= expected then
@@ -277,6 +278,8 @@ local function self_check()
 	assert_eq(roma_of("울"), "ul", "울 = ul")
 	assert_eq(roma_of("한"), "han", "한 = han")
 end
-self_check()
+
+-- Test hook: the suite asserts these; user runtimes never execute them.
+M.self_check = self_check
 
 return M

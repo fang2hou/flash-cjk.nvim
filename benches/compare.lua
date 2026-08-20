@@ -27,9 +27,9 @@ package.path = "./lua/?.lua;./lua/?/init.lua;" .. package.path
 
 local rust = require("flash-cjk.rust")
 local fc = require("flash-cjk")
-local flypy = require("flash-cjk.zhcnData")
-local jp_data = require("flash-cjk.jaData")
-local ko = require("flash-cjk.ko")
+local zhcn_data = require("flash-cjk.lang.zhcnData")
+local ja_data = require("flash-cjk.lang.jaData")
+local ko = require("flash-cjk.lang.ko")
 
 if not rust.available() then
 	io.stderr:write(
@@ -101,24 +101,24 @@ local function class_chars(s)
 	return chars
 end
 
--- zh: han chars straight out of the flypy tables; the table key they
+-- zh: han chars straight out of the zhcn tables; the table key they
 -- came from IS a plausible keystroke spelling for that char.
 local zh_pool = {}
-for key, class in pairs(flypy.char2patterns) do
+for key, class in pairs(zhcn_data.char2patterns) do
 	for _, ch in ipairs(class_chars(class)) do
 		zh_pool[#zh_pool + 1] = { char = ch, spell = key }
 	end
 end
-for key, class in pairs(flypy.char1patterns) do
+for key, class in pairs(zhcn_data.char1patterns) do
 	for _, ch in ipairs(class_chars(class)) do
 		zh_pool[#zh_pool + 1] = { char = ch, spell = key }
 	end
 end
 
--- ja: kana + kanji with their Unihan readings (jp_data is the same table
+-- ja: kana + kanji with their Unihan readings (ja_data is the same table
 -- the matcher consults, so these keystrokes are plausible by construction)
 local jp_pool = {}
-for ch, readings in pairs(jp_data.readings) do
+for ch, readings in pairs(ja_data.readings) do
 	jp_pool[#jp_pool + 1] = { char = ch, spell = readings[1], readings = readings }
 end
 
