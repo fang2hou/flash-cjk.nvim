@@ -59,6 +59,7 @@ local server = {
 	off = false, -- transport disabled for this session
 	fails = 0, -- transport-level failures (server -> spawn fallback)
 	session = nil, ---@type uv_pipe? held-open session connection
+	timer = nil, ---@type uv_timer? in-flight spawn probe timer
 	timeout = REQ_TIMEOUT,
 	bye_installed = false,
 }
@@ -67,9 +68,13 @@ local server = {
 ---truth on the Lua side) and creates its directory.
 ---@return string? path
 local function socket_path()
-	local base = vim.env.XDG_RUNTIME_DIR
+	-- os.getenv, not vim.env: socket_path can run inside libuv
+	-- callbacks (probe ticks), where the vimscript-backed vim.env
+	-- raises E5560; os.getenv is a plain C call that stays in sync
+	-- with vim.env writes (they call setenv).
+	local base = os.getenv("XDG_RUNTIME_DIR")
 	if not base or base == "" then
-		base = vim.env.TMPDIR
+		base = os.getenv("TMPDIR")
 	end
 	if not base or base == "" then
 		base = "/tmp"
@@ -247,20 +252,31 @@ local function spawn_and_probe(cb)
 	end
 	local deadline = uv.now() + WARM_BUDGET
 	local timer = uv.new_timer()
+	-- tracked so reset_server_for_test can cancel an in-flight probe:
+	-- its deadline callback would otherwise nil server.path and wreck
+	-- whatever probe replaced it
+	server.timer = timer
+	local function kill_timer()
+		if timer ~= nil then
+			pcall(function()
+				timer:stop()
+				timer:close()
+			end)
+			timer = nil
+			server.timer = nil
+		end
+	end
 	timer:start(PROBE_INTERVAL, PROBE_INTERVAL, function()
 		if server.session or server.off then
-			timer:stop()
-			timer:close()
+			kill_timer()
 			finish(server.session ~= nil)
 		elseif uv.now() >= deadline then
-			timer:stop()
-			timer:close()
+			kill_timer()
 			finish(false)
 		else
 			open_session(function(ok)
 				if ok then
-					timer:stop()
-					timer:close()
+					kill_timer()
 					finish(true)
 				end
 			end)
@@ -585,6 +601,15 @@ end
 
 function M.reset_server_for_test()
 	drop_session()
+	-- cancel any in-flight spawn probe: reset must leave no timer
+	-- whose failure callback can still clear server.path afterwards
+	if server.timer ~= nil then
+		pcall(function()
+			server.timer:stop()
+			server.timer:close()
+		end)
+		server.timer = nil
+	end
 	server.warming = false
 	server.spawning = false
 	server.probing = false
