@@ -1,201 +1,53 @@
 {
   "meta": {
-    "note": "rust_spawn_ms includes the per-keystroke process spawn (vim.system + JSON), same as the fallback transport; rust_ms (server) is one UDS request to the persistent server",
-    "cpu": "Apple M4 Pro",
-    "process_spawn_ms": 0.85,
-    "binary_startup_ms": 8.247,
-    "uds_roundtrip_ms": 0.041,
-    "transport": "server (UDS) for the rust series; rust_spawn_ms keeps the per-keystroke spawn transport",
+    "note": "rust_ms (server) is one UDS request to the persistent server, the transport live keystrokes use",
     "neovim": "0.12.4",
+    "server_rss_kb": 12704,
+    "uds_roundtrip_ms": 0.043,
+    "cpu": "Apple M4 Pro",
+    "date": "2026-08-20",
     "os": "Darwin 27.0.0 (arm64)",
-    "server_rss_kb": 12720,
-    "date": "2026-08-20"
+    "transport": "server (UDS)"
+  },
+  "overall": {
+    "vim_regex_failures_note": "cases whose alternation exceeded vim's NFA capture-group limit (E872); the Rust path matched them all",
+    "vim_ms": {
+      "mean": 8.228999999999999,
+      "p50": 0.449,
+      "p95": 29.059
+    },
+    "rust_server_ms": {
+      "mean": 0.971,
+      "p50": 0.17,
+      "p95": 4.352
+    },
+    "speedup_mean": 4.322,
+    "mean_ratio": 8.477,
+    "p95_ratio": 6.677,
+    "vim_regex_failures": 0,
+    "cases": 1050
   },
   "categories": {
-    "zhcn+ja+ko+en": {
-      "languages": [
-        "zhcn",
-        "ja",
-        "ko",
-        "en"
-      ],
-      "vim_ms": {
-        "p95": 89.562,
-        "mean": 16.426,
-        "p50": 1.895
-      },
-      "rust_spawn_ms": {
-        "p95": 22.571,
-        "mean": 10.804,
-        "p50": 9.401
-      },
-      "rust_server_ms": {
-        "p95": 14.089,
-        "mean": 1.967,
-        "p50": 0.39
-      },
-      "speedup_mean": 5.793,
-      "mean_ratio": 8.351000000000001,
-      "p95_ratio": 6.357,
-      "vim_regex_failures": 0,
-      "cases": 70
-    },
-    "ja+ko+en": {
-      "languages": [
-        "ja",
-        "ko",
-        "en"
-      ],
-      "vim_ms": {
-        "p95": 125.8,
-        "mean": 20.077,
-        "p50": 3.586
-      },
-      "rust_spawn_ms": {
-        "p95": 25.495,
-        "mean": 10.766,
-        "p50": 9.122999999999999
-      },
-      "rust_server_ms": {
-        "p95": 16.014,
-        "mean": 2.182,
-        "p50": 0.543
-      },
-      "speedup_mean": 7.442,
-      "mean_ratio": 9.202,
-      "p95_ratio": 7.855,
-      "vim_regex_failures": 0,
-      "cases": 70
-    },
-    "zhcn+ja": {
-      "languages": [
-        "zhcn",
-        "ja"
-      ],
-      "vim_ms": {
-        "p95": 4.537,
-        "mean": 1.099,
-        "p50": 0.407
-      },
-      "rust_spawn_ms": {
-        "p95": 9.637,
-        "mean": 8.967000000000001,
-        "p50": 8.984
-      },
-      "rust_server_ms": {
-        "p95": 0.422,
-        "mean": 0.23,
-        "p50": 0.208
-      },
-      "speedup_mean": 3.633,
-      "mean_ratio": 4.788,
-      "p95_ratio": 10.753,
-      "vim_regex_failures": 0,
-      "cases": 70
-    },
-    "zhcn+ko": {
-      "languages": [
-        "zhcn",
-        "ko"
-      ],
-      "vim_ms": {
-        "p95": 0.576,
-        "mean": 0.251,
-        "p50": 0.216
-      },
-      "rust_spawn_ms": {
-        "p95": 9.407999999999999,
-        "mean": 8.913,
-        "p50": 8.922000000000001
-      },
-      "rust_server_ms": {
-        "p95": 0.311,
-        "mean": 0.197,
-        "p50": 0.189
-      },
-      "speedup_mean": 1.191,
-      "mean_ratio": 1.274,
-      "p95_ratio": 1.849,
-      "vim_regex_failures": 0,
-      "cases": 70
-    },
-    "zhcn+en": {
-      "languages": [
-        "zhcn",
-        "en"
-      ],
-      "vim_ms": {
-        "p95": 42.629,
-        "mean": 4.264,
-        "p50": 0.411
-      },
-      "rust_spawn_ms": {
-        "p95": 20.831,
-        "mean": 9.877000000000001,
-        "p50": 9.007
-      },
-      "rust_server_ms": {
-        "p95": 11.853,
-        "mean": 1.289,
-        "p50": 0.257
-      },
-      "speedup_mean": 1.634,
-      "mean_ratio": 3.308,
-      "p95_ratio": 3.596,
-      "vim_regex_failures": 0,
-      "cases": 70
-    },
-    "ja+ko": {
-      "languages": [
-        "ja",
-        "ko"
-      ],
-      "vim_ms": {
-        "p95": 3.916,
-        "mean": 1.105,
-        "p50": 0.497
-      },
-      "rust_spawn_ms": {
-        "p95": 8.907999999999999,
-        "mean": 8.504,
-        "p50": 8.494
-      },
-      "rust_server_ms": {
-        "p95": 0.383,
-        "mean": 0.218,
-        "p50": 0.193
-      },
-      "speedup_mean": 3.873,
-      "mean_ratio": 5.066,
-      "p95_ratio": 10.237,
-      "vim_regex_failures": 0,
-      "cases": 70
-    },
     "ja+en": {
       "languages": [
         "ja",
         "en"
       ],
       "vim_ms": {
-        "p95": 133.489,
-        "mean": 28.622,
-        "p50": 1.498
+        "mean": 29.99,
+        "p50": 1.553,
+        "p95": 134.055
       },
-      "rust_spawn_ms": {
-        "p95": 13.763,
-        "mean": 9.869999999999999,
-        "p50": 8.891
-      },
-      "rust_server_ms": {
-        "p95": 4.78,
-        "mean": 1.32,
-        "p50": 0.33
-      },
-      "speedup_mean": 7.665,
-      "mean_ratio": 21.684,
-      "p95_ratio": 27.925,
+      "cases": 70,
+      "speedup_mean": 8.922000000000001,
+      "mean_ratio": 22.216,
+      "p95_ratio": 26.801,
       "vim_regex_failures": 0,
-      "cases": 70
+      "rust_server_ms": {
+        "mean": 1.35,
+        "p50": 0.272,
+        "p95": 5.002
+      }
     },
     "ko+en": {
       "languages": [
@@ -203,25 +55,20 @@
         "en"
       ],
       "vim_ms": {
-        "p95": 34.907,
-        "mean": 4.824,
-        "p50": 0.248
+        "mean": 4.944,
+        "p50": 0.28,
+        "p95": 35.225
       },
-      "rust_spawn_ms": {
-        "p95": 25.426,
-        "mean": 10.575,
-        "p50": 8.744999999999999
-      },
-      "rust_server_ms": {
-        "p95": 16.8,
-        "mean": 2.178,
-        "p50": 0.316
-      },
-      "speedup_mean": 0.978,
-      "mean_ratio": 2.215,
-      "p95_ratio": 2.078,
+      "cases": 70,
+      "speedup_mean": 1.215,
+      "mean_ratio": 2.32,
+      "p95_ratio": 2.122,
       "vim_regex_failures": 0,
-      "cases": 70
+      "rust_server_ms": {
+        "mean": 2.131,
+        "p50": 0.261,
+        "p95": 16.6
+      }
     },
     "zhcn+ja+ko": {
       "languages": [
@@ -230,125 +77,40 @@
         "ko"
       ],
       "vim_ms": {
-        "p95": 46.344,
-        "mean": 8.832000000000001,
-        "p50": 1.031
+        "mean": 9.067,
+        "p50": 1.003,
+        "p95": 47.545
       },
-      "rust_spawn_ms": {
-        "p95": 10.713,
-        "mean": 9.522,
-        "p50": 9.199999999999999
-      },
-      "rust_server_ms": {
-        "p95": 2.18,
-        "mean": 0.703,
-        "p50": 0.26
-      },
-      "speedup_mean": 6.02,
-      "mean_ratio": 12.569,
-      "p95_ratio": 21.254,
+      "cases": 70,
+      "speedup_mean": 6.954,
+      "mean_ratio": 13.615,
+      "p95_ratio": 19.799,
       "vim_regex_failures": 0,
-      "cases": 70
-    },
-    "zhcn": {
-      "languages": [
-        "zhcn"
-      ],
-      "vim_ms": {
-        "p95": 0.592,
-        "mean": 0.224,
-        "p50": 0.18
-      },
-      "rust_spawn_ms": {
-        "p95": 9.491,
-        "mean": 8.94,
-        "p50": 9.013999999999999
-      },
       "rust_server_ms": {
-        "p95": 0.207,
-        "mean": 0.155,
-        "p50": 0.152
-      },
-      "speedup_mean": 1.33,
-      "mean_ratio": 1.444,
-      "p95_ratio": 2.862,
-      "vim_regex_failures": 0,
-      "cases": 70
-    },
-    "ja": {
-      "languages": [
-        "ja"
-      ],
-      "vim_ms": {
-        "p95": 4.603,
-        "mean": 1.019,
-        "p50": 0.601
-      },
-      "rust_spawn_ms": {
-        "p95": 8.773999999999999,
-        "mean": 8.452,
-        "p50": 8.442
-      },
-      "rust_server_ms": {
-        "p95": 0.418,
-        "mean": 0.197,
-        "p50": 0.167
-      },
-      "speedup_mean": 3.979,
-      "mean_ratio": 5.17,
-      "p95_ratio": 11.013,
-      "vim_regex_failures": 0,
-      "cases": 70
+        "mean": 0.666,
+        "p50": 0.183,
+        "p95": 2.401
+      }
     },
     "ko": {
       "languages": [
         "ko"
       ],
       "vim_ms": {
-        "p95": 0.246,
-        "mean": 0.08500000000000001,
-        "p50": 0.068
+        "mean": 0.081,
+        "p50": 0.07099999999999999,
+        "p95": 0.239
       },
-      "rust_spawn_ms": {
-        "p95": 8.747999999999999,
-        "mean": 8.457000000000001,
-        "p50": 8.454000000000001
-      },
-      "rust_server_ms": {
-        "p95": 0.207,
-        "mean": 0.151,
-        "p50": 0.148
-      },
-      "speedup_mean": 0.535,
-      "mean_ratio": 0.5639999999999999,
-      "p95_ratio": 1.189,
+      "cases": 70,
+      "speedup_mean": 0.773,
+      "mean_ratio": 0.8129999999999999,
+      "p95_ratio": 1.508,
       "vim_regex_failures": 0,
-      "cases": 70
-    },
-    "en": {
-      "languages": [
-        "en"
-      ],
-      "vim_ms": {
-        "p95": 0.126,
-        "mean": 0.091,
-        "p50": 0.094
-      },
-      "rust_spawn_ms": {
-        "p95": 8.954000000000001,
-        "mean": 8.422000000000001,
-        "p50": 8.407
-      },
       "rust_server_ms": {
-        "p95": 0.218,
-        "mean": 0.169,
-        "p50": 0.171
-      },
-      "speedup_mean": 0.53,
-      "mean_ratio": 0.54,
-      "p95_ratio": 0.575,
-      "vim_regex_failures": 0,
-      "cases": 70
+        "mean": 0.1,
+        "p50": 0.1,
+        "p95": 0.158
+      }
     },
     "zhcn+ko+en": {
       "languages": [
@@ -357,25 +119,125 @@
         "en"
       ],
       "vim_ms": {
-        "p95": 32.24,
-        "mean": 5.47,
-        "p50": 0.524
+        "mean": 5.8,
+        "p50": 0.584,
+        "p95": 32.931
       },
-      "rust_spawn_ms": {
-        "p95": 19.334,
-        "mean": 10.597,
-        "p50": 9.298999999999999
-      },
-      "rust_server_ms": {
-        "p95": 10.688,
-        "mean": 1.859,
-        "p50": 0.309
-      },
-      "speedup_mean": 1.762,
-      "mean_ratio": 2.943,
-      "p95_ratio": 3.017,
+      "cases": 70,
+      "speedup_mean": 2.092,
+      "mean_ratio": 3.173,
+      "p95_ratio": 3.028,
       "vim_regex_failures": 0,
-      "cases": 70
+      "rust_server_ms": {
+        "mean": 1.828,
+        "p50": 0.256,
+        "p95": 10.876
+      }
+    },
+    "ja+ko+en": {
+      "languages": [
+        "ja",
+        "ko",
+        "en"
+      ],
+      "vim_ms": {
+        "mean": 19.475,
+        "p50": 2.585,
+        "p95": 129.707
+      },
+      "cases": 70,
+      "speedup_mean": 7.539,
+      "mean_ratio": 9.291,
+      "p95_ratio": 8.387,
+      "vim_regex_failures": 0,
+      "rust_server_ms": {
+        "mean": 2.096,
+        "p50": 0.454,
+        "p95": 15.465
+      }
+    },
+    "zhcn+ja+ko+en": {
+      "languages": [
+        "zhcn",
+        "ja",
+        "ko",
+        "en"
+      ],
+      "vim_ms": {
+        "mean": 16.257,
+        "p50": 1.831,
+        "p95": 94.98699999999999
+      },
+      "cases": 70,
+      "speedup_mean": 5.994,
+      "mean_ratio": 8.576000000000001,
+      "p95_ratio": 6.766,
+      "vim_regex_failures": 0,
+      "rust_server_ms": {
+        "mean": 1.896,
+        "p50": 0.337,
+        "p95": 14.038
+      }
+    },
+    "zhcn": {
+      "languages": [
+        "zhcn"
+      ],
+      "vim_ms": {
+        "mean": 0.198,
+        "p50": 0.16,
+        "p95": 0.517
+      },
+      "cases": 70,
+      "speedup_mean": 1.958,
+      "mean_ratio": 2.214,
+      "p95_ratio": 3.823,
+      "vim_regex_failures": 0,
+      "rust_server_ms": {
+        "mean": 0.089,
+        "p50": 0.082,
+        "p95": 0.135
+      }
+    },
+    "ja": {
+      "languages": [
+        "ja"
+      ],
+      "vim_ms": {
+        "mean": 1.221,
+        "p50": 0.663,
+        "p95": 4.608
+      },
+      "cases": 70,
+      "speedup_mean": 6.132,
+      "mean_ratio": 7.842,
+      "p95_ratio": 11.476,
+      "vim_regex_failures": 0,
+      "rust_server_ms": {
+        "mean": 0.156,
+        "p50": 0.119,
+        "p95": 0.402
+      }
+    },
+    "en": {
+      "languages": [
+        "en"
+      ],
+      "vim_ms": {
+        "mean": 0.083,
+        "p50": 0.082,
+        "p95": 0.141
+      },
+      "cases": 70,
+      "speedup_mean": 0.734,
+      "mean_ratio": 0.747,
+      "p95_ratio": 0.994,
+      "vim_regex_failures": 0,
+      "rust_server_ms": {
+        "mean": 0.111,
+        "p50": 0.112,
+        "p95": 0.142
+      }
     },
     "zhcn+ja+en": {
       "languages": [
@@ -384,48 +246,104 @@
         "en"
       ],
       "vim_ms": {
-        "p95": 244.855,
-        "mean": 28.77,
-        "p50": 2.764
+        "mean": 29.118,
+        "p50": 2.578,
+        "p95": 243.428
       },
-      "rust_spawn_ms": {
-        "p95": 24.193,
-        "mean": 11.337,
-        "p50": 9.323
-      },
-      "rust_server_ms": {
-        "p95": 14.875,
-        "mean": 2.521,
-        "p50": 0.45
-      },
-      "speedup_mean": 7.172,
-      "mean_ratio": 11.412,
-      "p95_ratio": 16.46,
+      "cases": 70,
+      "speedup_mean": 8.221,
+      "mean_ratio": 11.968,
+      "p95_ratio": 16.461,
       "vim_regex_failures": 0,
-      "cases": 70
+      "rust_server_ms": {
+        "mean": 2.433,
+        "p50": 0.377,
+        "p95": 14.788
+      }
+    },
+    "zhcn+ja": {
+      "languages": [
+        "zhcn",
+        "ja"
+      ],
+      "vim_ms": {
+        "mean": 1.042,
+        "p50": 0.449,
+        "p95": 3.622
+      },
+      "cases": 70,
+      "speedup_mean": 4.502,
+      "mean_ratio": 6.446,
+      "p95_ratio": 10.741,
+      "vim_regex_failures": 0,
+      "rust_server_ms": {
+        "mean": 0.162,
+        "p50": 0.124,
+        "p95": 0.337
+      }
+    },
+    "zhcn+ko": {
+      "languages": [
+        "zhcn",
+        "ko"
+      ],
+      "vim_ms": {
+        "mean": 0.237,
+        "p50": 0.222,
+        "p95": 0.5610000000000001
+      },
+      "cases": 70,
+      "speedup_mean": 1.686,
+      "mean_ratio": 1.779,
+      "p95_ratio": 2.272,
+      "vim_regex_failures": 0,
+      "rust_server_ms": {
+        "mean": 0.133,
+        "p50": 0.12,
+        "p95": 0.247
+      }
+    },
+    "zhcn+en": {
+      "languages": [
+        "zhcn",
+        "en"
+      ],
+      "vim_ms": {
+        "mean": 4.425,
+        "p50": 0.374,
+        "p95": 44.776
+      },
+      "cases": 70,
+      "speedup_mean": 2.2,
+      "mean_ratio": 3.604,
+      "p95_ratio": 3.749,
+      "vim_regex_failures": 0,
+      "rust_server_ms": {
+        "mean": 1.228,
+        "p50": 0.193,
+        "p95": 11.942
+      }
+    },
+    "ja+ko": {
+      "languages": [
+        "ja",
+        "ko"
+      ],
+      "vim_ms": {
+        "mean": 1.492,
+        "p50": 0.677,
+        "p95": 4.397
+      },
+      "cases": 70,
+      "speedup_mean": 5.904,
+      "mean_ratio": 8.224,
+      "p95_ratio": 8.872,
+      "vim_regex_failures": 0,
+      "rust_server_ms": {
+        "mean": 0.181,
+        "p50": 0.144,
+        "p95": 0.496
+      }
     }
-  },
-  "overall": {
-    "vim_ms": {
-      "p95": 30.107,
-      "mean": 8.077,
-      "p50": 0.439
-    },
-    "rust_spawn_ms": {
-      "p95": 12.834,
-      "mean": 9.6,
-      "p50": 8.888999999999999
-    },
-    "rust_server_ms": {
-      "p95": 4.273,
-      "mean": 1.022,
-      "p50": 0.227
-    },
-    "speedup_mean": 3.569,
-    "mean_ratio": 7.901,
-    "p95_ratio": 7.047,
-    "vim_regex_failures": 0,
-    "vim_regex_failures_note": "cases whose alternation exceeded vim's NFA capture-group limit (E872); the Rust path matched them all",
-    "cases": 1050
   }
 }
