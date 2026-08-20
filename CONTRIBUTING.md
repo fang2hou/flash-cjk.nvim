@@ -52,10 +52,9 @@ fix(rust): convert relative match lines to absolute buffer lines
 
 With squash merging, the PR title must follow the same convention (it becomes the commit message).
 
-## AI-Assisted Pull Requests
+## Pull Request Descriptions
 
-AI-generated or AI-assisted PRs are welcome under the same standard.
-The description must clearly include:
+Every pull request description must clearly include:
 
 - **Purpose**: what the change is for
 - **Impact**: what is affected
