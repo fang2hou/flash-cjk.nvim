@@ -20,12 +20,13 @@ local LANGS = { "zhcn", "ja", "ko", "en" }
 --             newline would break flash's prompt). C-c's interrupt is
 --             intercepted and dispatched to the lock action while a
 --             flash-cjk jump is active. false disables the lock.
--- alpha_mixing (top level): false additionally drops interpretations
---   that mix literal letters with language segments (e.g. alpha "n" +
---   pinyin "i"); the original flash-zh behavior keeps them; turning
---   mixing off trades some mixed-chain reachability (e.g. pinyin
---   "nihao" variants) for lower regex cost on long inputs; measure
---   before enabling.
+-- mixed_input (top level): false forbids an interpretation from
+--   returning to literal letters after a language segment -- literal
+--   heads stay allowed, pure-language and pure-literal chains are
+--   unaffected, so only targets like text "日n" (language followed by
+--   literal) lose reachability; the default keeps every mixed chain;
+--   turning it off trades that reachability for lower regex cost on
+--   long inputs; measure before disabling.
 -- Per-jump override: jump({ "zhcn", "en" }) is the enabled-set
 -- shorthand -- see M.resolve_langs.
 -- priority (top level): array of language codes, e.g.
@@ -41,7 +42,7 @@ M.config = {
 		ko = { enabled = true, scheme = "roma", force_key = "<C-k>" },
 		en = { enabled = true, force_key = "<C-e>" },
 	},
-	alpha_mixing = true,
+	mixed_input = true,
 }
 
 -- Registered matching schemes per language. Each language currently
@@ -111,7 +112,7 @@ function M.lang_flags(languages)
 		ja = languages.ja.enabled,
 		ko = languages.ko.enabled,
 		en = languages.en.enabled,
-		alpha_mixing = M.config.alpha_mixing,
+		mixed_input = M.config.mixed_input,
 	}
 end
 
@@ -143,7 +144,7 @@ function M.resolve_langs(ary)
 		ja = false,
 		ko = false,
 		en = false,
-		alpha_mixing = M.config.alpha_mixing,
+		mixed_input = M.config.mixed_input,
 	}
 	for _, code in ipairs(ary) do
 		if not vim.list_contains(LANGS, code) then

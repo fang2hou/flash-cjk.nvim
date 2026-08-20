@@ -171,9 +171,9 @@ local CASES_PER_CATEGORY = 70
 
 local CATEGORIES = {}
 for _, lang_list in ipairs(CATEGORY_MATRIX) do
-	-- langs flags enable ONLY this category's languages; alpha_mixing
+	-- langs flags enable ONLY this category's languages; mixed_input
 	-- stays on (it is a config flag, not a language)
-	local flags = { zhcn = false, ja = false, ko = false, en = false, alpha_mixing = true }
+	local flags = { zhcn = false, ja = false, ko = false, en = false, mixed_input = true }
 	for _, code in ipairs(lang_list) do
 		flags[code] = true
 	end
@@ -375,7 +375,7 @@ do
 	local tiny = vim.json.encode({
 		pattern = "a",
 		lines = { "a" },
-		langs = { zhcn = true, ja = true, ko = true, en = true, alpha_mixing = true },
+		langs = { zhcn = true, ja = true, ko = true, en = true, mixed_input = true },
 	})
 	startup_ms = med(function()
 		vim.system({ bin }, { stdin = tiny }):wait()
