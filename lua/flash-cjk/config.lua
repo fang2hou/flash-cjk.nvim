@@ -26,9 +26,8 @@ local LANGS = { "zhcn", "ja", "ko", "en" }
 --   mixing off trades some mixed-chain reachability (e.g. pinyin
 --   "nihao" variants) for lower regex cost on long inputs; measure
 --   before enabling.
--- Per-jump overrides use the same shape: jump({ "zhcn", "en" }) is
--- the enabled-set shorthand, jump(nil, { languages = ... }) overrides
--- fields for one jump -- see M.resolve_langs.
+-- Per-jump override: jump({ "zhcn", "en" }) is the enabled-set
+-- shorthand -- see M.resolve_langs.
 -- priority (top level): array of language codes, e.g.
 --   { "ja", "zhcn" }; matches reachable through earlier-listed
 --   languages receive their labels first, so targets in the
@@ -116,29 +115,6 @@ function M.lang_flags(languages)
 	}
 end
 
----Effective per-jump languages config: the setup state deep-merged
----with the per-jump opts.languages override (same shape as setup).
----@param opts table? jump/remote opts
----@return table languages
-function M.effective_languages(opts)
-	local languages = vim.tbl_deep_extend("force", {}, M.config.languages)
-	local override = opts and opts.languages
-	if override ~= nil then
-		if type(override) ~= "table" then
-			error("flash-cjk: languages must be a table")
-		end
-		for lang, value in pairs(override) do
-			languages[lang] = vim.tbl_deep_extend(
-				"force",
-				{},
-				languages[lang],
-				M.normalize_language(lang, value)
-			)
-		end
-	end
-	return languages
-end
-
 ---Flat force-key map derived from a languages config table, as
 ---consumed by make_mix_mode and the labeler.
 ---@param languages table
@@ -152,17 +128,15 @@ function M.force_keys(languages)
 end
 
 ---Resolves a jump/remote language argument into boolean language
----flags. nil or {} -> the setup-enabled set (with the per-jump
----opts.languages override applied); otherwise the array is the
----enabled-set shorthand: it fully decides the enabled set for this
----jump (schemes fall back to each language's default) and overrides
----the setup switches. alpha_mixing always comes from config.
+---flags. nil or {} -> the setup-enabled set; otherwise the array is
+---the enabled-set shorthand: it fully decides the enabled set for
+---this jump (schemes fall back to each language's default) and
+---overrides the setup switches.
 ---@param ary string[]? language codes, e.g. { "zhcn", "en" }
----@param opts table? per-jump opts ({ languages = ... } honored)
 ---@return table langs boolean flags
-function M.resolve_langs(ary, opts)
+function M.resolve_langs(ary)
 	if ary == nil or #ary == 0 then
-		return M.lang_flags(M.effective_languages(opts))
+		return M.lang_flags()
 	end
 	local langs = {
 		zhcn = false,
@@ -200,18 +174,6 @@ function M.normalize_priority(value)
 		end
 	end
 	return out
-end
-
----Effective label-assignment priority for one jump: the per-jump
----override when given, otherwise the setup value. nil (or an empty
----list) means position order.
----@param opts table? jump/remote opts
----@return string[]? priority
-function M.effective_priority(opts)
-	if opts and opts.priority ~= nil then
-		return M.normalize_priority(opts.priority)
-	end
-	return M.config.priority
 end
 
 return M

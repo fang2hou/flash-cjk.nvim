@@ -107,7 +107,7 @@ Work in this repository. Read AGENTS.md at the repository root first and follow 
 ### 言語設定
 
 各言語は `languages` テーブルで独立に設定できます — setupによるグローバル
-指定、言語コード配列によるジャンプ単位の指定、またはフィールド単位の上書き：
+指定か、言語コード配列によるジャンプ単位の指定：
 
 ```lua
 require("flash-cjk").setup({
@@ -122,8 +122,6 @@ require("flash-cjk").setup({
 })
 
 require("flash-cjk").jump({ "ja", "ko", "en" })  -- このジャンプでは簡体字中国語を無効化
-require("flash-cjk").jump(nil, { languages = { ja = { force_key = "<C-d>" } } })
-require("flash-cjk").jump(nil, { priority = { "ko" } })  -- このジャンプのみ: 韓国語の一致を優先
 ```
 
 `scheme` は簡体字中国語 `"xiaohe"`、日本語と韓国語 `"roma"` を受け付けます
@@ -133,8 +131,6 @@ require("flash-cjk").jump(nil, { priority = { "ko" } })  -- このジャンプ�
 なかったフィールドは現状を維持します。配列なしの `jump()` はsetupで有効化
 されたセットを使い、配列を渡すとそのジャンプの有効セットは配列だけで完全に
 決まります（スキームは各言語のデフォルト）。setupのスイッチより優先されます。
-第2引数はflashのオプションをそのまま透過し、その中の `languages` はその
-ジャンプにのみ適用されます — setupと同じ形です。
 
 `priority` はラベル割り当ての順序を言語で決めます。リストの前方の言語で
 到達できる一致が早いラベルから先に受け取り（複数言語で解釈できる一致は最も
@@ -221,8 +217,8 @@ require("flash-cjk").jump(nil, { priority = { "ko" } })  -- このジャンプ�
   （setupで `zhcn = { enabled = false }` としても、`jump({ "zhcn", "en" })`
   は簡体字中国語に一致します）。
 - **force_keyの変更や無効化はどうやりますか？** `languages` テーブルで、
-  setupによるグローバル指定かジャンプ単位で：`force_key = "<M-c>"` でキーを
-  変え、`force_key = false` でその言語の固定を無効化します。
+  setupによるグローバル指定で：`force_key = "<M-c>"` でキーを変え、
+  `force_key = false` でその言語の固定を無効化します。
 
 ## Rustアクセラレーション（任意）
 

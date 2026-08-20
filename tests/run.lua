@@ -306,7 +306,7 @@ end
 do
 	vim.api.nvim_input("<esc>")
 	pcall(function()
-		fc.jump(nil, { pattern = "x" })
+		fc.jump()
 	end) -- installs patches, loop exits on the prefed escape
 	local Prompt = require("flash.prompt")
 	Prompt.set("ti\x01", false)
@@ -579,15 +579,6 @@ do
 	ok(pcall(fc.resolve_langs, { "xx" }) == false, "resolve_langs: unknown code errors")
 	fc.setup({ languages = { ko = false } })
 	ok(fc.resolve_langs({ "ko" }).ko, "resolve_langs: array overrides a setup-disabled language")
-	l = fc.resolve_langs(nil, { languages = { ko = false } })
-	ok(not l.ko and l.ja, "resolve_langs: per-jump languages override applies")
-	-- per-jump overrides must not leak into the setup state
-	vim.api.nvim_input("<esc>")
-	local ok_jump = pcall(function()
-		fc.jump(nil, { pattern = "x", languages = { ja = { force_key = "<C-d>" } } })
-	end)
-	ok(ok_jump, "jump: per-jump languages override runs through the loop")
-	ok(fc.config.languages.ja.force_key == "<C-j>", "jump: per-jump override does not mutate the setup config")
 	local ja_en = fc.make_mix_mode(fc.resolve_langs({ "ja", "en" }))
 	ok(matches(ja_en, "ti", "ち"), "ja+en mode: ti matches ち")
 	ok(not matches(ja_en, "ti", "梯"), "ja+en mode: ti does not match 梯")
@@ -673,7 +664,7 @@ do
 	ml = labeler_mod.match_langs("timex", "ti", { zhcn = true, ja = true, ko = true, en = false })
 	ok(#ml == 0, "match_langs: en attribution follows the enabled flags")
 
-	-- config validation: storage, dedupe, errors, per-jump override
+	-- config validation: storage, dedupe, errors
 	local saved = vim.deepcopy(fc.config)
 	fc.setup({ priority = { "ja", "zhcn" } })
 	ok(vim.inspect(fc.config.priority) == vim.inspect({ "ja", "zhcn" }), "setup: priority stored in order")
@@ -681,8 +672,6 @@ do
 	ok(vim.inspect(fc.config.priority) == vim.inspect({ "ja", "ko" }), "setup: priority duplicates dropped")
 	ok(pcall(fc.setup, { priority = { "xx" } }) == false, "setup: unknown priority code errors")
 	ok(pcall(fc.setup, { priority = "ja" }) == false, "setup: non-array priority errors")
-	ok(vim.inspect(cfg.effective_priority({ priority = { "ko" } })) == vim.inspect({ "ko" }), "effective_priority: per-jump override wins")
-	ok(vim.inspect(cfg.effective_priority(nil)) == vim.inspect({ "ja", "ko" }), "effective_priority: falls back to the setup value")
 	fc.config = saved
 	ok(fc.config.priority == nil, "config restore: priority back to unset")
 end
