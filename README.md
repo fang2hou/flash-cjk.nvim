@@ -104,8 +104,7 @@ Simplified Chinese / Japanese / Korean / English and recompute instantly:
 ### Language configuration
 
 Each language is configured independently through the `languages` table —
-globally via setup, or per jump via a language-code array or a field-level
-override:
+globally via setup, or per jump via a language-code array:
 
 ```lua
 require("flash-cjk").setup({
@@ -120,8 +119,6 @@ require("flash-cjk").setup({
 })
 
 require("flash-cjk").jump({ "ja", "ko", "en" })  -- this jump: no Simplified Chinese
-require("flash-cjk").jump(nil, { languages = { ja = { force_key = "<C-d>" } } })
-require("flash-cjk").jump(nil, { priority = { "ko" } })  -- this jump: label ko matches first
 ```
 
 `scheme` accepts `"xiaohe"` for `zhcn` and `"roma"` for `ja`/`ko` (the only
@@ -130,9 +127,7 @@ scheme concept and errors if given one. Entries also accept the `true`/`false`
 shorthand for `enabled`. `setup` deep-merges: unspecified fields keep their
 current value. `jump()` without an array uses the setup-enabled set; a given
 array fully decides that jump's set (schemes fall back to each language's
-default) and overrides the setup switches. The second argument passes flash
-options through, with `languages` overriding fields for that jump only —
-same shape as setup.
+default) and overrides the setup switches.
 
 `priority` orders label assignment by language: matches reachable through
 earlier-listed languages receive the earliest labels (a match several
@@ -217,9 +212,9 @@ long inputs like `nihao` gain extra mixed-chain interpretations.
   (`jump({ "ja", "ko", "en" })`), or reaching a language you disabled
   (`jump({ "zhcn", "en" })` still matches Simplified Chinese after
   `zhcn = { enabled = false }` in setup).
-- **How do I change or disable a force_key?** In the `languages` table —
-  globally via setup or for one jump: `force_key = "<M-c>"` changes the key,
-  `force_key = false` disables that language's lock.
+- **How do I change or disable a force_key?** In the `languages` table via
+  setup: `force_key = "<M-c>"` changes the key, `force_key = false`
+  disables that language's lock.
 
 ## Rust acceleration (optional)
 

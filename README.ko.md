@@ -106,7 +106,7 @@ Work in this repository. Read AGENTS.md at the repository root first and follow 
 ### 언어 설정
 
 각 언어는 `languages` 테이블로 독립적으로 설정합니다 — setup으로 전역적으로,
-언어 코드 배열로 점프별로, 또는 필드 단위로 덮어쓰기:
+언어 코드 배열로 점프별로:
 
 ```lua
 require("flash-cjk").setup({
@@ -121,8 +121,6 @@ require("flash-cjk").setup({
 })
 
 require("flash-cjk").jump({ "ja", "ko", "en" })  -- 이번 점프에서는 간체 중국어 제외
-require("flash-cjk").jump(nil, { languages = { ja = { force_key = "<C-d>" } } })
-require("flash-cjk").jump(nil, { priority = { "ko" } })  -- 이번 점프만: 한국어 매칭 우선
 ```
 
 `scheme`은 간체 중국어 `"xiaohe"`, 일본어와 한국어 `"roma"`를 받습니다(현재
@@ -131,8 +129,7 @@ require("flash-cjk").jump(nil, { priority = { "ko" } })  -- 이번 점프만: �
 받습니다. `setup`은 깊게 병합되어 지정하지 않은 필드는 현재 값을 유지합니다.
 배열 없이 `jump()`를 호출하면 setup에서 켠 집합을 사용하고, 배열을 넘기면 그
 점프의 활성 집합은 배열로만 완전히 결정됩니다(스킴은 각 언어의 기본값).
-setup 스위치보다 우선하며, 두 번째 인자는 flash 옵션을 그대로 전달하고 그
-안의 `languages`는 그 점프에만 적용됩니다 — setup과 같은 형태입니다.
+setup 스위치보다 우선합니다.
 
 `priority`는 언어별 라벨 할당 순서를 정합니다. 목록 앞쪽 언어로 도달 가능한
 매칭이 가장 빠른 라벨부터 받고(여러 언어로 해석 가능한 매칭은 가장 우선순위가
@@ -214,8 +211,8 @@ Shift가 필요하니 로마자 표기(`kk`)를 대신 사용하세요. 단일 �
 "en" })`), 꺼 둔 언어에 도달할 때(setup에서 `zhcn = { enabled = false }`여도
   `jump({ "zhcn", "en" })`은 간체 중국어를 매칭합니다).
 - **force_key는 어떻게 바꾸거나 끄나요?** `languages` 테이블에서, setup으로
-  전역적으로 또는 점프 한 번에만: `force_key = "<M-c>"`로 키를 바꾸고
-  `force_key = false`로 해당 언어 고정을 끕니다.
+  전역적으로: `force_key = "<M-c>"`로 키를 바꾸고 `force_key = false`로
+  해당 언어 고정을 끕니다.
 
 ## Rust 가속 (선택 사항)
 

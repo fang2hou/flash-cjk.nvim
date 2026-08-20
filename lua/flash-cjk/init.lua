@@ -40,8 +40,8 @@ end
 -- Default mixed mode: every enabled language, default force keys.
 M.mix_mode = M.make_mix_mode(config.lang_flags(), config.force_keys(M.config.languages))
 
-local function build_opts(langs, opts)
-	local keys = config.force_keys(config.effective_languages(opts))
+local function build_opts(langs)
+	local keys = config.force_keys(M.config.languages)
 	local mode = M.make_mix_mode(langs, keys)
 	local actions = {}
 	for _, lang in ipairs({ "zhcn", "ja", "ko", "en" }) do
@@ -71,7 +71,7 @@ local function build_opts(langs, opts)
 		},
 		actions = actions,
 		labeler = function(_, state)
-			require("flash-cjk.labeler").new(state, langs, keys, config.effective_priority(opts)):update()
+			require("flash-cjk.labeler").new(state, langs, keys, M.config.priority):update()
 		end,
 	}
 	local rust_ok, rust = pcall(require, "flash-cjk.rust")
@@ -80,23 +80,19 @@ local function build_opts(langs, opts)
 		-- warm the persistent server (async, no-op without Unix/binary)
 		rust.warmup()
 	end
-	return vim.tbl_deep_extend("force", defaults, opts)
+	return defaults
 end
 
 ---Starts a flash jump with CJK matching.
 ---@param langs string[]? language codes for this jump, e.g. { "zhcn", "en" }
----@param opts table? flash options (plus languages and priority overrides)
-function M.jump(langs, opts)
-	opts = opts or {}
-	get_flash().jump(build_opts(M.resolve_langs(langs, opts), opts))
+function M.jump(langs)
+	get_flash().jump(build_opts(M.resolve_langs(langs)))
 end
 
 ---Starts a flash remote (operator-pending) jump with CJK matching.
 ---@param langs string[]? language codes for this jump, e.g. { "zhcn", "en" }
----@param opts table? flash options (plus languages and priority overrides)
-function M.remote(langs, opts)
-	opts = opts or {}
-	get_flash().remote(build_opts(M.resolve_langs(langs, opts), opts))
+function M.remote(langs)
+	get_flash().remote(build_opts(M.resolve_langs(langs)))
 end
 
 -- @param opts table

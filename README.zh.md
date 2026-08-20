@@ -101,7 +101,7 @@ Work in this repository. Read AGENTS.md at the repository root first and follow 
 ### 语言配置
 
 每种语言都通过 `languages` 表独立配置——全局经 setup 设置，或按次跳转用
-语言代码数组 / 字段级覆盖：
+语言代码数组：
 
 ```lua
 require("flash-cjk").setup({
@@ -116,16 +116,13 @@ require("flash-cjk").setup({
 })
 
 require("flash-cjk").jump({ "ja", "ko", "en" })  -- 本次跳转：不匹配简体中文
-require("flash-cjk").jump(nil, { languages = { ja = { force_key = "<C-d>" } } })
-require("flash-cjk").jump(nil, { priority = { "ko" } })  -- 本次跳转：韩语匹配优先获得标签
 ```
 
 `scheme` 接受简体中文 `"xiaohe"`、日语/韩语 `"roma"`（目前仅有的方案，
 今后可扩展）；`en` 为 ASCII 字面匹配，无方案概念，给了会报错。条目也接受
 `true`/`false` 简写（等价于 `enabled`）。`setup` 深合并：未给出的字段保留
 现值。不带数组的 `jump()` 使用 setup 启用集；给定数组即完整决定该次跳转的
-启用集（方案取该语言默认值），并优先于 setup 开关。第二个参数透传 flash
-选项，其中 `languages` 只对本次跳转生效——形状与 setup 相同。
+启用集（方案取该语言默认值），并优先于 setup 开关。
 
 `priority` 按语言决定标签分配顺序：排在前面的语言可达的匹配先拿到最早的
 标签（可被多种语言解释的匹配按其中优先级最高的语言归属），主力语言的目标
@@ -196,9 +193,8 @@ ASCII 按字面逐字母匹配，与 flash.nvim 自带搜索完全一致——�
   时——临时排除一门语言（`jump({ "ja", "ko", "en" })`），或到达被你禁用
   的语言（setup 里 `zhcn = { enabled = false }` 后，`jump({ "zhcn", "en" })`
   仍匹配简体中文）。
-- **怎么修改或禁用 force_key？** 在 `languages` 表中——全局经 setup，或
-  只对一次跳转生效：`force_key = "<M-c>"` 改键，`force_key = false` 禁用
-  该语言的锁定。
+- **怎么修改或禁用 force_key？** 在 `languages` 表中，全局经 setup：
+  `force_key = "<M-c>"` 改键，`force_key = false` 禁用该语言的锁定。
 
 ## Rust 加速（可选）
 

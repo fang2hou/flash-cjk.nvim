@@ -27,7 +27,6 @@ end
 -- 1. lazy.nvim installed and can load the spec.
 vim.cmd("Lazy load flash-cjk.nvim")
 local fc = require("flash-cjk")
-local cfg = require("flash-cjk.config")
 ok(type(fc.jump) == "function" and type(fc.remote) == "function", "lazy load: flash-cjk module resolves")
 
 ok(
@@ -56,25 +55,21 @@ end
 
 -- 2. Real jump in a real buffer, driven through prefed typeahead (the
 -- flash loop consumes nvim_input-queued keys, same technique as
--- tests/run.lua). last_state captures the flash state via a labeler
--- wrapper that chains into flash-cjk's own labeler, so behavior under
--- test is exactly build_opts' default.
+-- tests/run.lua). jump() takes no options, so last_state is captured
+-- by wrapping the labeler module's constructor: build_opts re-quires
+-- the same cached table, and the wrapper chains into flash-cjk's own
+-- labeler, so behavior under test is exactly build_opts' default.
 local last_state
-local keys = cfg.force_keys(fc.config.languages)
-
-local function jump_capture(opts)
-  opts = opts or {}
-  opts.labeler = function(_, state)
-    last_state = state
-    require("flash-cjk.labeler").new(state, fc.resolve_langs(nil, opts), keys, cfg.effective_priority(opts)):update()
-  end
-  return fc.jump(nil, opts)
+local labeler_mod = require("flash-cjk.labeler")
+local labeler_new = labeler_mod.new
+labeler_mod.new = function(state, ...)
+  last_state = state
+  return labeler_new(state, ...)
 end
 
-local function run(prefed, opts)
+local function run(prefed)
   vim.api.nvim_input(prefed)
-  local ok_run, err = pcall(jump_capture, opts or {})
-  return ok_run, err
+  return pcall(fc.jump)
 end
 
 vim.cmd("enew!")
@@ -135,9 +130,9 @@ else
   ok(false, "jump ti+C-j: no state captured")
 end
 
--- language priority through the real loop: the per-jump priority
--- override decides which match gets the first label -- ち (ja) or 梯
--- (zhcn); without one, position order labels the leftmost first.
+-- language priority through the real loop: the setup-level priority
+-- decides which match gets the first label -- ち (ja) or 梯 (zhcn);
+-- without one, position order labels the leftmost first.
 -- <cr> accepts the default target (jump semantics are untouched by
 -- priority); labels stay on the captured state for assertion. The
 -- cursor resets between runs so every run starts from the same spot.
@@ -153,19 +148,22 @@ local function label_of_last(char)
 end
 
 last_state = nil
-ok_run, err = run("ti<cr>", { priority = { "ja" } })
+fc.setup({ priority = { "ja" } })
+ok_run, err = run("ti<cr>")
 vim.api.nvim_win_set_cursor(0, { 1, 0 })
 ok(ok_run and err == nil, "priority ja: loop completed without error" .. (err and (": " .. tostring(err)) or ""))
 ok(label_of_last("ち") == "a", ("priority ja: first label on ち (got %s)"):format(tostring(label_of_last("ち"))))
 
 last_state = nil
-ok_run, err = run("ti<cr>", { priority = { "zhcn" } })
+fc.setup({ priority = { "zhcn" } })
+ok_run, err = run("ti<cr>")
 vim.api.nvim_win_set_cursor(0, { 1, 0 })
 ok(ok_run and err == nil, "priority zhcn: loop completed without error" .. (err and (": " .. tostring(err)) or ""))
 ok(label_of_last("梯") == "a", ("priority zhcn: first label on 梯 (got %s)"):format(tostring(label_of_last("梯"))))
 
 last_state = nil
-ok_run, err = run("ti<cr>", {})
+fc.config.priority = nil
+ok_run, err = run("ti<cr>")
 vim.api.nvim_win_set_cursor(0, { 1, 0 })
 ok(ok_run and err == nil, "no priority: loop completed without error" .. (err and (": " .. tostring(err)) or ""))
 ok(label_of_last("ち") == "a", ("no priority: position order labels ち first (got %s)"):format(tostring(label_of_last("ち"))))
