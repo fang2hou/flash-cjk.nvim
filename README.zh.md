@@ -14,10 +14,8 @@
 
 </div>
 
-## 为什么
-
 为了跳转到 CJK 文本而再去输入 CJK 文本，意味着操作中途还得与输入法缠斗。
-flash-cjk 让你的双手始终停留在 ASCII 上：`ni` 落在 日 / に / ニ，`r`
+flash-cjk 让你的双手始终停留在 ASCII 上：`ni` 落在 你 / 日 / に / ニ，`r`
 按拼音首字母命中 日，`dkss` 按两拼式键盘（두벌식）键位命中
 안녕——同时普通字母依然按字面匹配，与 flash.nvim 的行为完全一致。
 
@@ -25,22 +23,22 @@ flash-cjk 让你的双手始终停留在 ASCII 上：`ni` 落在 日 / に / ニ
   汉字读音与假名，黑本式与训令式）、韩语（RR 罗马字与两拼式键盘键序）、
   ASCII 字面匹配——全部同时生效，且可各自独立开关
 - 不在范围内：取代 flash.nvim 自带功能（treesitter 跳转、remote
-  等）；输入法集成；NFD 形式的韩文文件名（见已知限制）
+  等）；输入法集成；NFD 形式的韩文文件名（见「功能特性」下的已知限制）
 - 状态：活跃开发中
 
-## 安装
+## 🚀 使用
 
-需要 [flash.nvim](https://github.com/folke/flash.nvim)；使用
-[lazy.nvim](https://github.com/folke/nvim-lazy) 安装：
+需要 [flash.nvim](https://github.com/folke/flash.nvim) 和 Neovim ≥ 0.10，
+使用 [lazy.nvim](https://github.com/folke/nvim-lazy) 安装：
 
 ```lua
 return {{
     "fang2hou/flash-cjk.nvim",
     event = "VeryLazy",
     dependencies = "folke/flash.nvim",
-    -- 可选的 Rust 加速器（见“Rust 加速”）：随安装/更新自动构建；
-    -- 若没有 cargo，插件会静默改走 vim-regex 路径。
-    -- 删除这一行即可完全跳过构建。
+    -- Optional Rust accelerator (see "⚡ Performance"): built on
+    -- install/update; without cargo the plugin silently uses the vim-regex
+    -- path instead. Delete this line to skip the build entirely.
     build = "cargo build --release --manifest-path=rust/Cargo.toml",
     keys = {{
         "s",
@@ -52,10 +50,10 @@ return {{
     }},
     opts = {
         languages = {
-            zhcn = {force_key = "<C-c>"},  -- 默认：启用，方案 "xiaohe"
-            ja = {force_key = "<C-j>"},         -- 默认方案："roma"
+            zhcn = {force_key = "<C-c>"},  -- default: enabled, scheme "xiaohe"
+            ja = {force_key = "<C-j>"},         -- default scheme: "roma"
             ko = {force_key = "<C-k>"},
-            en = {force_key = "<C-e>"},         -- en 无方案概念
+            en = {force_key = "<C-e>"},         -- en has no scheme concept
         },
         mixed_input = true,
     }
@@ -74,8 +72,6 @@ return {{
 不用 lazy.nvim？自行调用 `require("flash-cjk").setup({ ... })`，选项与上面的
 `opts` 相同。
 
-## 使用
-
 按下 `s`，输入，跳转——流程与 flash.nvim 一致。如果目标上还没出现标签，
 继续输入即可（就像搜索一样）；标签使用小写字母，且绝不会与可见匹配项可能
 出现的下一个输入字母冲突。
@@ -86,138 +82,88 @@ return {{
 Work in this repository. Read AGENTS.md at the repository root first and follow it.
 ```
 
-### 输入中途强制锁定语言
+**开发或对插件做基准测试**需要 macOS 或 Linux 上的
+[mise](https://mise.jdx.dev/)：
 
-输入过程中，按 `C-c` / `C-j` / `C-k` / `C-e` 可将匹配锁定为简体中文 /
-日语 / 韩语 / 英语，并立即重新计算：
-
-- `ti` 同时匹配简体中文（梯/踢…）与日语（ち，训令式）；按下 `C-c`
-  后只剩简体中文读音——ち 不再匹配
-- 锁定会叠加进输入串：**退格删过标记即解除锁定**；按其他锁定键可直接切换
-- 锁定期间，英文字面匹配不受影响
-- 锁定按键按语言在 `languages` 表中配置（`force_key`，设为 `false`
-  可禁用）——见下文
-
-### 语言配置
-
-每种语言都通过 `languages` 表独立配置——全局经 setup 设置，或按次跳转用
-语言代码数组：
-
-```lua
-require("flash-cjk").setup({
-    languages = {
-        zhcn = {enabled = true, scheme = "xiaohe", force_key = "<C-c>"},
-        ja = {enabled = true, scheme = "roma", force_key = "<C-j>"},
-        ko = {enabled = true, scheme = "roma", force_key = "<C-k>"},
-        en = {enabled = true, force_key = "<C-e>"},  -- 无方案概念
-    },
-    mixed_input = true,
-    priority = { "ja", "zhcn" },  -- 标签顺序：优先日语匹配
-})
-
-require("flash-cjk").jump({ "ja", "ko", "en" })  -- 本次跳转：不匹配简体中文
+```bash
+mise install
+mise run test
 ```
 
-`scheme` 接受简体中文 `"xiaohe"`、日语/韩语 `"roma"`（目前仅有的方案，
-今后可扩展）；`en` 为 ASCII 字面匹配，无方案概念，给了会报错。条目也接受
-`true`/`false` 简写（等价于 `enabled`）。`setup` 深合并：未给出的字段保留
-现值。不带数组的 `jump()` 使用 setup 启用集；给定数组即完整决定该次跳转的
-启用集（方案取该语言默认值），并优先于 setup 开关。
+`mise run` 会列出其余全部任务（`check`、`e2e`、`codegen`、`format`）；参见
+[DEVELOPMENT.md](./DEVELOPMENT.md)。
 
-`priority` 按语言决定标签分配顺序：排在前面的语言可达的匹配先拿到最早的
-标签（可被多种语言解释的匹配按其中优先级最高的语言归属），主力语言的目标
-更省 label 键。匹配集与跳转语义不变；未设置时保持位置顺序。
+<details>
+<summary>Rust 加速器：什么时候需要，什么时候不需要</summary>
 
-单语言用户只需保留一个语言启用。标点跟随语言开关：关闭 `zhcn` 时，`,`
-匹配 、（日文）而非 ，（全角逗号）；`。` 为简体中文/日语共用，始终匹配；
-`-` → ー 归属 `ja`。
+上面的 `build =` 行只在有 cargo 时才构建可选的原生匹配器；手动构建：
+`cd rust && cargo build --release`。你不需要 Rust：没有该二进制时，插件
+会静默改走 vim-regex 路径，结果完全一致（由交叉验证保证）。在沙箱或
+受限环境中，删掉 `build =` 行即可——纯 Lua 路径不需要编译器，也不启动
+任何进程。
 
-## 按语言匹配
+</details>
 
-### 简体中文（zhcn）
+## 💡 核心概念
 
-输入小鹤双拼（Xiaohe double-pinyin）两键编码，或拼音首字母：`ni` → 你，
-`r` → 日。每个汉字都能用两键编码到达；单个字母可命中所有拼音以该字母开头
-的汉字。当前注册的方案是 `"xiaohe"`（见「语言配置」中的 `scheme`）——
-目前唯一方案，今后可扩展。
+- **解释**——每条按键链都会被切分为字面字母与语言码（拼音、罗马音、
+  罗马字）；同一输入的每种合理解读同时保持可达。`ni` 同时匹配简体中文
+  （你）与日语（日 / に / ニ）。
+- **语言锁定**——输入过程中，`C-c` / `C-j` / `C-k` / `C-e` 将匹配锁定为
+  简体中文 / 日语 / 韩语 / 英语，并立即重新计算：按下 `C-c` 后只剩简体
+  中文读音——ち 不再匹配。锁定会叠加进输入串，因此**退格删过标记即解除
+  锁定**；按其他锁定键则直接切换。锁定按键按语言配置（`force_key`，设为
+  `false` 可禁用）。
+- **混合输入**——一条按键链可以一部分按字面、一部分按语言码解读。输入
+  `nn` 可到达 `日n`（罗马音 `n` + 字面 `n`）；镜像文本 `n日` 在任何模式下
+  都能命中，因为字面开头永远允许。将 `mixed_input` 设为 `false` 只丢弃
+  反向形态（先语言段后字面），并让三语长输入的最坏情况延迟降低
+  40–60%——除非长输入明显卡顿，否则保持默认。
+- **按次跳转的语言集**——每种语言都通过 `languages` 表独立配置（全局经
+  `setup`，或按次跳转：`jump({ "ja", "ko", "en" })` 在该次跳转中不匹配
+  简体中文）。`setup` 深合并；`true`/`false` 简写等价于开关 `enabled`。
+  标点跟随语言开关：关闭 `zhcn` 后，`,` 匹配 、（日文）而非 ，（全角
+  逗号）。
 
-### 日语（ja）
+## ✨ 功能特性
 
-直接输入罗马音（Romaji）即可命中：输入 `ni` 命中“日”，输入 `ti` 命中
-“ち”（训令式）。汉字读音取自 Unicode Unihan（`kJapanese`/`On`/`Kun`，
-约 13,000 个汉字），按罗马音前缀匹配，前缀最长 3 个字母（`n`/`ni`/`nic`
-均命中“日”）；假名匹配其音节的所有常见罗马音拼法（`si`/`shi`、
-`tu`/`tsu`）；拗音成对作为一个整体匹配（`sha` → しゃ/シャ）；`-` 匹配
-长音符 ー，`[`/`]` → 「」『』，`,` → 、，`!` → ！。
+- **简体中文（`zhcn`）**——输入小鹤双拼（Xiaohe double-pinyin）两键
+  编码，或拼音首字母：`ni` → 你，`r` → 日。每个汉字都能用两键编码到达；
+  单个字母可命中所有拼音以该字母开头的汉字。方案：`"xiaohe"`（目前
+  唯一，今后可接入更多）。
+- **日语（`ja`）**——罗马音匹配：`ni` 命中 日，`ti` 命中 ち（训令式）。
+  汉字读音取自 Unicode Unihan（约 13,000 个汉字），按罗马音前缀匹配，
+  前缀最长 3 个字母（`n`/`ni`/`nic` 均命中 日）；假名匹配其音节的所有
+  常见罗马音拼法（`si`/`shi`、`tu`/`tsu`）；拗音成对作为一个整体匹配
+  （`sha` → しゃ/シャ）；`-` 匹配 ー，`[`/`]` → 「」『』，`,` → 、，
+  `!` → ！。
+- **韩语（`ko`）**——两拼式（두벌식，Dubeolsik，韩语标准键盘）键序：
+  `dks` → 안、`gkrry` → 학교、`dkswek` → 앉다。也可输入罗马字：RR
+  （Revised Romanization of Korean，로마자 표기법）以及常见的
+  McCune-Reischauer 拼法（`kim`/`gim` → 김），逐音节按前缀匹配。音节由
+  程序规则分解为韩文字母（jamo）——无需词典数据。紧音字母在两拼式键盘
+  上需按 Shift——改用罗马字（`kk`）即可；单元音片段可像日语元音一样
+  出现在输入中间（`ai` → 아이）。
+- **英语（`en`）**——普通 ASCII 按字面逐字母匹配，与 flash.nvim 自带
+  搜索完全一致：代码标识符无需任何语言解释即可到达。即使关闭 `en`，数字
+  与大写字母仍按字面匹配；所有已启用语言都无法解读的输入（如 `n.`）会
+  退化为字面匹配。
+- **标签优先级**——`priority = { "ja", "zhcn" }` 决定标签分配顺序：排在
+  前面的语言可达的匹配先拿到最早的标签，因此主力语言的目标所需的标签键
+  最少。匹配集与跳转语义不变；未设置时保持普通的位置顺序。
 
-### 韩语（ko）
+已知限制：macOS 以 NFD（分解的韩文字母序列）存储韩文文件名；两条匹配
+路径都针对 NFC 预组合音节，因此在 oil/netrw 的文件名缓冲区中跳转时无法
+匹配韩文文件名。普通代码与文档缓冲区为 NFC，不受影响。
 
-直接输入两拼式（두벌식，Dubeolsik，韩语标准键盘）键序：`dkss` → 안녕、
-`gkrry` → 학교、`dkswek` → 앉다；也可以输入韩语罗马字（RR 表记法，
-2000 年文化观光部式），并兼容常见的 McCune-Reischauer 拼法（`kim`/`gim`
-→ 김），逐音节按前缀匹配。音节由程序规则分解为韩文字母（初声 × 中声 ×
-终声）——无需词典数据。紧音字母在两拼式键盘上需按 Shift——建议改用罗马字
-（`kk`）；单元音片段可像日语元音一样出现在输入中间（`ai` → 아이）。
+## ⚡ 性能
 
-### 英语（en）
-
-ASCII 按字面逐字母匹配，与 flash.nvim 自带搜索完全一致——代码标识符无需
-任何语言解释即可到达。`en` 无方案概念。即使关闭 `en`，数字与大写字母仍按
-字面匹配；所有已启用语言都无法解读的输入（如 `n.`）会退化为字面匹配。
-
-## 混合输入（mixed_input）
-
-一条按键链可以一部分按字面、一部分按语言码解读；这个开关决定两者在
-同一条解释里的混合自由度。
-
-- 开启（默认）：所有混合解释保持可达——包括「语言段后接字面字母」的
-  目标。
-- 关闭（`mixed_input = false`）：解释一旦进入语言段，就不能再回到字面
-  字母（字面开头的链不受影响，丢弃的只是反向形态）。三语长输入的最坏
-  情况延迟降低 40–60%（`nini` 的解释数从 59 降到 31）。
-- 建议：保持默认；仅当长输入打字明显卡顿时再关闭。
-
-例子（中日英）：输入 `nn` 命中 `日n`——`日` 是 romaji 前缀 `n`
-（nichi），末尾 `n` 按字面匹配，这条「语言段+字面」链只有默认模式保留；
-镜像文本 `n日` 两种模式都能命中——字面在链首永远允许。
-
-## 常见问题
-
-- **会不会卡？** 短前缀（1–2 个字母）在内置 vim-regex 路径上中位数约
-  0.5 ms 即可应答（单语言启用时 0.1–0.9 ms）。重负载场景是该路径上的
-  三语长输入：最重的组合平均约 30 ms、p95 达 134–243 ms。启用原生匹配器
-  后，所有组合均值都在约 2.5 ms 内（最差 p95 约 17 ms）。见下方基准表。
-- **必须安装 Rust 吗？** 不必。`build =` 行只在有 cargo 时构建可选的原生
-  匹配器；没有它，插件会静默改走 vim-regex 路径，结果完全一致（由交叉
-  验证保证）。
-- **费 CPU/电池吗？** vim-regex 路径是进程内正则。原生路径为每个用户
-  维护一个约 12 MB 的常驻匹配服务，只在有 Neovim 实例使用它时存在，
-  每次按键仅一次约 0.04 ms 的 socket 往返——开销取决于你的输入量。
-- **沙箱或受限环境？** 删掉 `build =` 行即可：纯 Lua 路径不需要编译器，
-  也不启动任何进程。
-- **什么时候需要 jump 数组形式？** 当某一次跳转想要与 setup 不同的启用集
-  时——临时排除一门语言（`jump({ "ja", "ko", "en" })`），或到达被你禁用
-  的语言（setup 里 `zhcn = { enabled = false }` 后，`jump({ "zhcn", "en" })`
-  仍匹配简体中文）。
-- **怎么修改或禁用 force_key？** 在 `languages` 表中，全局经 setup：
-  `force_key = "<M-c>"` 改键，`force_key = false` 禁用该语言的锁定。
-
-## Rust 加速（可选）
-
-可选的原生匹配器一次构建、自动启用：按下方基准测试，它压平了最坏情况——
-均值总体降低 8.5×，p95 尾部总体降低 6.7×、最重组合最高 27×——并且对正则
-选择分支已超出 Vim 编译上限（E872）的模式依然可用。上面
-lazy spec 的 `build =` 行会自动处理；手动构建：
-
-```sh
-cd rust && cargo build --release
-```
-
-若没有二进制——或构建反复失败——插件会透明回退到纯 Lua 的 vim-regex
-路径，行为完全一致，由逐项严格交叉验证套件保证。细节与测量数据见
-[rust/README.md](rust/README.md)。
-
-## 性能
+短前缀（1–2 个字母）在内置 vim-regex 路径上中位数约 0.5 ms 即可应答
+（单语言启用时 0.1–0.9 ms）。重负载场景是该路径上的三语长输入：最重的
+组合平均可达约 30 ms、p95 达 134–243 ms。可选的原生匹配器压平了最坏
+情况——均值总体降低 8.5×，p95 尾部降低 6.7×（最重组合最高 27×）——并且
+对正则选择分支已超出 Vim 编译上限（E872）的模式依然可用。构建完成后
+自动启用。
 
 <p align="center">
   <img
@@ -230,6 +176,7 @@ cd rust && cargo build --release
 在完整语言组合矩阵上实测两条真实按键路径：四种语言代码——`zhcn`（简体中文）、`ja`（日语）、`ko`（韩语）、`en`（英语）——的全部单选、双选、三选与四选组合，共 15 组 × 70 个窗口 = 1,050 个 20–60 行的生成窗口。每一行只启用本行语言、从这些语言采样窗口文本、并键入 1–6 个对这些语言合理的按键（`en` 单选行为纯 ASCII 单词）；种子固定可复现。
 
 **Rust（server）**是原生路径，真实按键即走此路：每次按键向常驻匹配服务发送一个请求（见下文）。
+
 单语言——只启用一种语言：
 
 | 窗口语言 | vim-regex 均值 | Rust server |  比率 | vim-regex p95 | server p95 |
@@ -270,48 +217,47 @@ cd rust && cargo build --release
 
 **如何解读。** 常驻服务只在自身启动时支付一次进程创建与数据表构建，之后在 0.09–2.5 ms 的平坦区间内应答：15 个类别中有 13 个 Rust 占优，其余两个（`en`/`ko` 单选）为 0.08 对 0.10–0.11 ms——双方都在 0.2 ms 以内。更重要的是尾部：最重的组合（`ja`+`en`、`zhcn`+`ja`+`en`）的 p95 从 vim-regex 的 134–243 ms 降到 5.0–14.8 ms，总体 p95 从 29.1 ms 降到 4.4 ms。
 
-### 后台服务（Unix，零配置）
+<details>
+<summary>后台服务（Unix，零配置）</summary>
 
 二进制存在时，插件会透明地为每个用户维护一个匹配服务：
 
-- **生命周期**：一个 Neovim 实例持有空闲会话连接期间即视为注册。退出 Neovim（或被 `kill -9`）会立即注销；当没有任何实例连接超过 2 秒（`FLASH_CJK_SERVER_GRACE_MS`）时，服务删除自己的 socket 并退出。最后一个实例离开时服务随之消失——没有轮询、没有守护进程管理、没有配置。
-- **内存**：仅一个常驻进程，约 12.4 MB RSS，且只在至少一个 Neovim 实例使用它时存在。
-- **自动回退**：传输层偶发故障（超时、崩溃）会让该次按键回退到逐键 spawn 传输，并异步拉起替代服务；连续失败则触发既有熔断器，退到 vim-regex 路径。Windows 与超长 socket 路径（`sun_path` 上限）保持 spawn 传输。
+- **生命周期**：一个 Neovim 实例持有空闲会话连接期间即视为注册。退出
+  Neovim（或被 `kill -9`）会立即注销；当没有任何实例连接超过 2 秒
+  （`FLASH_CJK_SERVER_GRACE_MS`）时，服务删除自己的 socket 并退出。最后
+  一个实例离开时服务随之消失——没有轮询、没有守护进程管理、没有配置。
+- **内存**：仅一个常驻进程，约 12.4 MB RSS，只在至少一个 Neovim 实例
+  使用它时存在，外加每次按键约 0.04 ms 的 Unix domain socket 往返。
+  CPU/电池开销取决于你的输入量，而不是进程启动的频率。
+- **自动回退**：传输层偶发故障（超时、崩溃）会让该次按键回退到逐键
+  spawn 传输，并异步恢复服务；连续失败会触发熔断器，退到 vim-regex
+  路径。Windows 与超长 socket 路径（`sun_path` 上限）保持 spawn 传输。
 
-**系统影响。** 代价是：每个用户一个约 12.4 MB 的常驻进程（只在编辑期间存在），外加每次按键约 0.04 ms 的 Unix domain socket 往返。CPU/电池开销取决于输入量，而不是进程启动次数。二进制约 1.8 MB，静态携带数据表，无运行时依赖。若二进制缺失、构建失败或运行时反复失败，熔断器会触发，每次按键透明回退到 vim-regex 路径——匹配结果完全一致，由交叉验证套件保证。当常驻内存紧张或进程启动受限时，偏好纯 vim-regex 路径（即不构建二进制）。
+二进制约 1.8 MB，静态携带数据表，无运行时依赖。当常驻内存紧张或进程
+启动受限时，建议直接用纯 vim-regex 路径（即索性不构建二进制）。
 
-在您自己的机器上复现：
+</details>
+
+在你自己的机器上复现：
 
 ```sh
 cargo build --release --manifest-path rust/Cargo.toml
-nvim -l benches/compare.lua # 写入 benches/results.json
-uv run benches/gen_svg.py   # 重新生成 assets/benchmark.svg
+nvim -l benches/compare.lua # writes benches/results.json
+uv run benches/gen_svg.py   # regenerates assets/benchmark.svg
 ```
 
-## 已知限制
-
-- macOS 以 NFD（分解的韩文字母序列）存储韩文文件名；两条匹配路径都针对
-  NFC 预组合音节，因此在 oil/netrw 的文件名缓冲区中跳转时无法匹配韩文
-  文件名。普通代码与文档缓冲区为 NFC，不受影响。
-
-## 延伸阅读
+## 📚 延伸阅读
 
 | 目标             | 阅读                                                                       |
 | ---------------- | -------------------------------------------------------------------------- |
-| 开发与验证       | [DEVELOPMENT.md](./DEVELOPMENT.md)                                         |
 | 了解系统         | [ARCHITECTURE.md](./ARCHITECTURE.md)                                       |
+| 开发与验证       | [DEVELOPMENT.md](./DEVELOPMENT.md)                                         |
 | 参与贡献         | [CONTRIBUTING.md](./CONTRIBUTING.md)                                       |
 | 交给 AI 代理     | [AGENTS.md](./AGENTS.md)                                                   |
 | 原生匹配器设计   | [rust/README.md](./rust/README.md)                                         |
 | 阅读其他语言版本 | [简体中文](README.zh.md) · [日本語](README.ja.md) · [한국어](README.ko.md) |
 
-## 环境要求
-
-- Neovim ≥ 0.10，配合 [flash.nvim](https://github.com/folke/flash.nvim)
-- 可选：较新的 Rust（≥ 1.97，cargo）用于原生加速器——没有它一切功能照常可用
-- 开发工具链：由 mise 管理（参见 [DEVELOPMENT.md](./DEVELOPMENT.md)）
-
-## 许可证
+## 📄 许可证
 
 MIT——见 [LICENSE](./LICENSE)。数据衍生自
 [Unicode Unihan 数据库](https://www.unicode.org/)（Unicode License）。感谢

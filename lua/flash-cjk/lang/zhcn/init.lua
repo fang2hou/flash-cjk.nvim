@@ -1,13 +1,15 @@
--- Simplified Chinese engine (lang/ registry member): xiaohe
--- double-pinyin two-key codes and single pinyin initials. The pattern
--- tables live in data.lua; below, the reverse lookups the labeler
--- needs (character -> spellings) are built from those same tables.
-local data = require("flash-cjk.lang.zhcn.data")
+-- Simplified Chinese engine: xiaohe double-pinyin two-key codes and
+-- single pinyin initials (pattern tables in data.json). The labeler's
+-- reverse lookup (character -> spellings) is built here from the same
+-- tables, mirroring the matcher's alternatives and Rust's CN_REVERSE so
+-- predictions agree across both paths.
+
+local data = require("flash-cjk.lang").data("zhcn")
 local char_size = require("flash-cjk.util").char_size
 
 local M = {}
 
-M.comma = data.comma -- punctuation map (。 is shared with ja)
+M.comma = data.comma
 
 ---Regex fragment for a 1-2 letter input segment: a two-key xiaohe
 ---code, or a single pinyin initial letter. nil when nothing matches.
@@ -20,113 +22,77 @@ function M.pattern(seg)
 	return data.char2patterns[seg]
 end
 
--- ------------------------------------------------------------------
--- labeler support: reverse lookups (character -> pinyin spellings)
+local spellings = {} ---@type table<string, string[]>
 
-local py_table = {}
-local mt = {}
-setmetatable(py_table, { __index = mt })
-
-function py_table:insert(char, pinyin)
-	if not self[char] then
-		self[char] = {}
+local function add_spelling(char, spelling)
+	local list = spellings[char]
+	if not list then
+		list = {}
+		spellings[char] = list
 	end
-	table.insert(self[char], pinyin)
-end
-
-function py_table:find(char)
-	return self[char]
+	list[#list + 1] = spelling
 end
 
 local function utf8_len(str)
 	local len = 0
-	local currentIndex = 1
-	while currentIndex <= #str do
-		currentIndex = currentIndex + char_size(str, currentIndex)
+	local pos = 1
+	while pos <= #str do
+		pos = pos + char_size(str, pos)
 		len = len + 1
 	end
 	return len
 end
 
-local function utf8_sub(str, startChar, numChars)
-	local startIndex = 1
-	while startChar > 1 do
-		startIndex = startIndex + char_size(str, startIndex)
-		startChar = startChar - 1
+local function utf8_char_at(str, index)
+	local start = 1
+	for _ = 1, index - 1 do
+		start = start + char_size(str, start)
 	end
-
-	local currentIndex = startIndex
-
-	while numChars > 0 and currentIndex <= #str do
-		currentIndex = currentIndex + char_size(str, currentIndex)
-		numChars = numChars - 1
-	end
-
-	return string.sub(str, startIndex, currentIndex - 1)
+	return string.sub(str, start, start + char_size(str, start) - 1)
 end
 
-local function init_py_table()
-	-- both spellings a character is reachable through: the xiaohe
-	-- initial (char1patterns, single-letter input) and the full
-	-- syllable (char2patterns) -- mirroring the matcher's alternatives
-	-- and the Rust CN_REVERSE table, so predictions and language
-	-- attribution agree across paths
-	for _, table_name in ipairs({ "char1patterns", "char2patterns" }) do
-		for k, v in pairs(data[table_name]) do
-			local start_char, end_char = v:find("%[(.-)%]")
-			v = v:sub(start_char + 1, end_char - 1)
-			for i = 1, utf8_len(v) do
-				local char = utf8_sub(v, i, 1)
-				py_table:insert(char, k)
-			end
-		end
-	end
-	for k, v in pairs(data.comma) do
-		local start_char, end_char = v:find("%[(.-)%]")
-		v = v:sub(start_char + 1, end_char - 1)
-		for i = 1, utf8_len(v) do
-			local char = utf8_sub(v, i, 1)
-			py_table:insert(char, k)
+local function class_chars(class)
+	local start_char, end_char = class:find("%[(.-)%]")
+	return class:sub(start_char + 1, end_char - 1)
+end
+
+for _, table_name in ipairs({ "char1patterns", "char2patterns", "comma" }) do
+	for key, class in pairs(data[table_name]) do
+		local chars = class_chars(class)
+		for i = 1, utf8_len(chars) do
+			add_spelling(utf8_char_at(chars, i), key)
 		end
 	end
 end
 
-local function append_to_pinyins(pinyins, suffixes)
-	local result = {}
-	if #pinyins == 0 then
-		pinyins = { "" }
+local function combine(prefixes, suffixes)
+	if #prefixes == 0 then
+		prefixes = { "" }
 	end
-	for i = 1, #pinyins do
-		for j = 1, #suffixes do
-			table.insert(result, pinyins[i] .. suffixes[j])
+	local out = {}
+	for _, prefix in ipairs(prefixes) do
+		for _, suffix in ipairs(suffixes) do
+			out[#out + 1] = prefix .. suffix
 		end
 	end
-	return result
+	return out
 end
 
----All pinyin spellings the given text could have been typed as
----(labeler predictions). Characters without a known reading pass
----through as-is.
+---All pinyin spellings the given text could have been typed as (labeler
+---predictions). Characters without a known reading pass through as-is.
 ---@param text string
 ---@return string[]
 function M.strs(text)
 	local pinyins = {}
 	for i = 1, utf8_len(text) do
-		local char = utf8_sub(text, i, 1)
-		if string.len(char) == 1 then
-			pinyins = append_to_pinyins(pinyins, { char })
-		else
-			local char_pinyins = py_table:find(char)
-			if not char_pinyins then
-				pinyins = append_to_pinyins(pinyins, { char })
-			else
-				pinyins = append_to_pinyins(pinyins, char_pinyins)
-			end
+		local char = utf8_char_at(text, i)
+		local char_pinyins = spellings[char]
+		if char_pinyins == nil or string.len(char) == 1 then
+			char_pinyins = { char }
 		end
+		pinyins = combine(pinyins, char_pinyins)
 	end
 	return pinyins
 end
-
-init_py_table()
 
 return M

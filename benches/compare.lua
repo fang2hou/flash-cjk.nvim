@@ -23,9 +23,10 @@ package.path = "./lua/?.lua;./lua/?/init.lua;" .. package.path
 
 local rust = require("flash-cjk.rust")
 local fc = require("flash-cjk")
-local zhcn_data = require("flash-cjk.lang.zhcn.data")
-local ja_data = require("flash-cjk.lang.ja.data")
-local ko = require("flash-cjk.lang.ko")
+local lang = require("flash-cjk.lang")
+local zhcn_data = lang.data("zhcn")
+local ja_data = lang.data("ja")
+local ko = lang.get("ko")
 
 if not rust.available() then
 	io.stderr:write(
@@ -46,7 +47,9 @@ if vim.fn.has("unix") == 1 then
 		return rust.server_ready()
 	end, 10)
 	if not server_mode then
-		io.stderr:write("ERROR: server transport failed to warm up; benchmark would mix transports\n")
+		io.stderr:write(
+			"ERROR: server transport failed to warm up; benchmark would mix transports\n"
+		)
 		os.exit(1)
 	end
 end
@@ -132,11 +135,43 @@ end
 -- en: plain ASCII words (code identifiers + prose); the en-only category
 -- is pure ASCII, elsewhere they mix into CJK windows
 local en_pool = {
-	"function", "value", "return", "local", "require", "config", "window",
-	"buffer", "label", "match", "pattern", "state", "editor", "cursor",
-	"jump", "search", "result", "plugin", "flash", "table", "index",
-	"loop", "line", "note", "quick", "brown", "fox", "jumps", "over",
-	"lazy", "dog", "while", "value", "name", "user", "text", "input",
+	"function",
+	"value",
+	"return",
+	"local",
+	"require",
+	"config",
+	"window",
+	"buffer",
+	"label",
+	"match",
+	"pattern",
+	"state",
+	"editor",
+	"cursor",
+	"jump",
+	"search",
+	"result",
+	"plugin",
+	"flash",
+	"table",
+	"index",
+	"loop",
+	"line",
+	"note",
+	"quick",
+	"brown",
+	"fox",
+	"jumps",
+	"over",
+	"lazy",
+	"dog",
+	"while",
+	"value",
+	"name",
+	"user",
+	"text",
+	"input",
 }
 
 -- keyed by the canonical language codes used in results.json
@@ -363,7 +398,9 @@ do
 		end, 200)
 		-- resident memory of the serving process
 		local addr = rust.server_addr()
-		local pid = vim.fn.trim(vim.fn.system(("pgrep -f 'flash-cjk-search serve --socket %s'"):format(addr)) or "")
+		local pid = vim.fn.trim(
+			vim.fn.system(("pgrep -f 'flash-cjk-search serve --socket %s'"):format(addr)) or ""
+		)
 		if pid ~= "" then
 			local rss = vim.fn.trim(vim.fn.system(("ps -o rss= -p %s"):format(pid)) or "")
 			server_rss_kb = tonumber(rss) or 0
@@ -375,7 +412,11 @@ print(("generating %d cases across %d categories..."):format(CASES_TOTAL, #CATEG
 local results = {
 	meta = {
 		date = os.date("%Y-%m-%d"),
-		os = ("%s %s (%s)"):format(uname.sysname or "?", uname.release or "?", uname.machine or "?"),
+		os = ("%s %s (%s)"):format(
+			uname.sysname or "?",
+			uname.release or "?",
+			uname.machine or "?"
+		),
 		cpu = cpu ~= "" and cpu or (uname.machine or "?"),
 		neovim = nvim_ver,
 		uds_roundtrip_ms = round(uds_ms),
@@ -477,7 +518,7 @@ results.overall = {
 	vim_regex_failures_note = "cases whose alternation exceeded vim's NFA capture-group limit (E872); the Rust path matched them all",
 }
 
-local out = io.open("benches/results.json", "w")
+local out = assert(io.open("benches/results.json", "w"))
 local ok, encoded = pcall(vim.json.encode, results, { indent = "  " })
 if not ok then
 	encoded = vim.json.encode(results)

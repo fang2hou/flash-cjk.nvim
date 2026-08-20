@@ -1,16 +1,14 @@
 -- Rust matcher bridge: talks to a persistent flash-cjk-search server
 -- over a Unix domain socket when possible (Unix only, zero config),
--- falls back to spawning the binary per keystroke, and falls back
--- further to flash's vim-regex searcher when the binary is
--- unavailable or keeps failing (circuit breaker).
+-- falls back to spawning the binary per keystroke, and further to
+-- flash's vim-regex searcher when the binary is unavailable or keeps
+-- failing (circuit breaker).
 --
--- Server lifecycle (connection-based, see rust/crates/flash-cjk-search/
+-- Server lifecycle is connection-based (rust/crates/flash-cjk-search/
 -- src/serve.rs): this instance registers by holding one idle session
--- connection open; the server exits once no client has held a session
--- for the grace period, so the last Neovim instance out takes the
--- server with it. On VimLeavePre we send {"cmd":"bye"} and close the
--- session as a best-effort fast path.
-
+-- connection open; when no client has held a session for the grace
+-- period the server exits, so the last Neovim instance out takes the
+-- server with it. VimLeavePre sends {"cmd":"bye"} as a fast path.
 local M = {}
 
 local uv = vim.uv
@@ -51,15 +49,26 @@ local WARM_BUDGET = 2000 -- ms of async probing after spawning the server
 local PROBE_INTERVAL = 50 -- ms between readiness probes
 
 ---@class flashcjk.server
+---@field path string?
+---@field warming boolean
+---@field spawning boolean
+---@field probing boolean
+---@field off boolean
+---@field fails integer
+---@field session uv.uv_pipe_t? held-open session connection
+---@field timer uv.uv_timer_t? in-flight spawn probe timer
+---@field timeout integer
+---@field bye_installed boolean
+---@field proc uv.uv_process_t?
 local server = {
-	path = nil, ---@type string?
-	warming = false, -- warmup pass in flight
-	spawning = false, -- spawn+probe pass in flight
-	probing = false, -- restart probe scheduled
-	off = false, -- transport disabled for this session
-	fails = 0, -- transport-level failures (server -> spawn fallback)
-	session = nil, ---@type uv_pipe? held-open session connection
-	timer = nil, ---@type uv_timer? in-flight spawn probe timer
+	path = nil,
+	warming = false,
+	spawning = false,
+	probing = false,
+	off = false,
+	fails = 0,
+	session = nil,
+	timer = nil,
 	timeout = REQ_TIMEOUT,
 	bye_installed = false,
 }
@@ -89,7 +98,7 @@ local function socket_path()
 		return nil -- sun_path cap (104 on macOS, 108 on Linux): can never bind
 	end
 	return sock
- end
+end
 
 local schedule_restart_probe -- forward declaration (session EOF hook)
 
@@ -97,22 +106,22 @@ local function is_unix()
 	return vim.fn.has("unix") == 1
 end
 
-local function close_pipe(p)
-	if p and not p:is_closing() then
-		p:close()
+local function close_pipe(pipe)
+	if pipe and not pipe:is_closing() then
+		pipe:close()
 	end
 end
 
 ---Drops the registration: closes the session connection. The server
 ---sees EOF and deregisters us immediately (same as process death).
 local function drop_session()
-	local s = server.session
+	local session = server.session
 	server.session = nil
-	if s then
+	if session then
 		pcall(function()
-			s:read_stop()
+			session:read_stop()
 		end)
-		close_pipe(s)
+		close_pipe(session)
 	end
 end
 
@@ -129,22 +138,22 @@ local function install_bye()
 		vim.api.nvim_create_autocmd("VimLeavePre", {
 			once = true,
 			callback = function()
-				local s = server.session
+				local session = server.session
 				server.session = nil
-				if not s then
+				if not session then
 					return
 				end
 				local sent = false
-				s:write(('{"cmd":"bye","pid":%d}\n'):format(uv.os_getpid()), function()
+				session:write(('{"cmd":"bye","pid":%d}\n'):format(uv.os_getpid()), function()
 					sent = true
 				end)
 				vim.wait(100, function()
 					return sent
 				end, 1) -- best-effort flush; EOF works even without it
 				pcall(function()
-					s:read_stop()
+					session:read_stop()
 				end)
-				close_pipe(s)
+				close_pipe(session)
 			end,
 		})
 	end)
@@ -163,6 +172,10 @@ local function open_session(cb)
 	server.path = path
 	local done = false
 	local pipe = uv.new_pipe()
+	if not pipe then
+		cb(false, "no pipe")
+		return
+	end
 	local function finish(ok, err)
 		if done then
 			return
@@ -252,6 +265,10 @@ local function spawn_and_probe(cb)
 	end
 	local deadline = uv.now() + WARM_BUDGET
 	local timer = uv.new_timer()
+	if not timer then
+		finish(false)
+		return
+	end
 	-- tracked so reset_server_for_test can cancel an in-flight probe:
 	-- its deadline callback would otherwise nil server.path and wreck
 	-- whatever probe replaced it
@@ -330,9 +347,9 @@ function M.warmup()
 			server.warming = false
 			return
 		end
-		spawn_and_probe(function(ok2)
+		spawn_and_probe(function(restarted)
 			server.warming = false
-			if not ok2 then
+			if not restarted then
 				-- nothing to warm; retry on the next jump
 				server.path = nil
 			end
@@ -347,17 +364,24 @@ end
 ---@return string? line response line without the newline
 ---@return string? err nil, "timeout", or a uv error name
 local function request(payload, timeout)
+	local path = server.path
+	if not path then
+		return nil, "no server path"
+	end
 	local pipe = uv.new_pipe()
-	local st = { done = false, buf = "", line = nil, err = nil, closed = false }
+	if not pipe then
+		return nil, "no pipe"
+	end
+	local rx = { done = false, buf = "", line = nil, err = nil, closed = false }
 	local function tear(err)
-		if st.done then
+		if rx.done then
 			return
 		end
-		st.done = true
-		st.err = err
+		rx.done = true
+		rx.err = err
 	end
-	pipe:connect(server.path, function(err)
-		if st.closed then
+	pipe:connect(path, function(err)
+		if rx.closed then
 			return
 		end
 		if err then
@@ -365,17 +389,17 @@ local function request(payload, timeout)
 			return
 		end
 		pipe:read_start(function(rerr, chunk)
-			if st.done then
+			if rx.done then
 				return
 			end
 			if rerr then
 				tear(rerr)
 			elseif chunk then
-				st.buf = st.buf .. chunk
-				local nl = st.buf:find("\n", 1, true)
+				rx.buf = rx.buf .. chunk
+				local nl = rx.buf:find("\n", 1, true)
 				if nl then
-					st.line = st.buf:sub(1, nl - 1)
-					st.done = true
+					rx.line = rx.buf:sub(1, nl - 1)
+					rx.done = true
 				end
 			else -- EOF before a full response line
 				tear("eof")
@@ -388,16 +412,16 @@ local function request(payload, timeout)
 		end)
 	end)
 	if not vim.wait(timeout, function()
-		return st.done
+		return rx.done
 	end, 1) then
 		tear("timeout")
 	end
-	st.closed = true
+	rx.closed = true
 	pcall(function()
 		pipe:read_stop()
 	end)
 	close_pipe(pipe)
-	return st.line, st.err
+	return rx.line, rx.err
 end
 
 -- Per-keystroke prediction cache filled by the matcher, keyed by
@@ -407,11 +431,13 @@ end
 -- the attributed language codes of the match -- the interpretations
 -- the current pattern could have taken (empty for punctuation and
 -- when the binary predates the tags).
-M.predictions = setmetatable({}, { __index = function(t, k)
-	local v = {}
-	rawset(t, k, v)
-	return v
-end })
+M.predictions = setmetatable({}, {
+	__index = function(cache, win)
+		local per_win = {}
+		rawset(cache, win, per_win)
+		return per_win
+	end,
+})
 
 local function encode_req(pattern, lines, langs)
 	return vim.json.encode({
@@ -442,18 +468,18 @@ end
 function M.search_spawn(pattern, lines, langs)
 	local path = find_bin()
 	local req = encode_req(pattern, lines, langs)
-	local ok, out = pcall(function()
+	local spawned, result = pcall(function()
 		return vim.system({ path }, { stdin = req, timeout = 5000 }):wait()
 	end)
-	if not ok or not out or out.code ~= 0 then
+	if not spawned or not result or result.code ~= 0 then
 		fails = fails + 1
 		if fails >= FAIL_LIMIT then
 			disabled = true
 		end
 		return nil
 	end
-	local okd, resp = pcall(vim.json.decode, out.stdout)
-	if not okd or not valid_response(resp) then
+	local decoded, resp = pcall(vim.json.decode, result.stdout)
+	if not decoded or not valid_response(resp) then
 		fails = fails + 1
 		if fails >= FAIL_LIMIT then
 			disabled = true
@@ -475,9 +501,9 @@ end
 ---@return table? response
 function M.search(pattern, lines, langs)
 	if server.session and not disabled and is_unix() then
-		local line, err = request(encode_req(pattern, lines, langs), server.timeout)
-		local okd, resp = pcall(vim.json.decode, line or "")
-		if okd and valid_response(resp) then
+		local line = request(encode_req(pattern, lines, langs), server.timeout)
+		local decoded, resp = pcall(vim.json.decode, line or "")
+		if decoded and valid_response(resp) then
 			server.fails = 0
 			return resp
 		end
@@ -552,7 +578,8 @@ function M.matcher(langs)
 				}
 				local key = string.format("%d:%d:%d", line, col, end_col)
 				keep[key] = true
-				M.predictions[win][key] = { text = preds[i] or "", langs = lang_tags and lang_tags[i] or {} }
+				M.predictions[win][key] =
+					{ text = preds[i] or "", langs = lang_tags and lang_tags[i] or {} }
 			end
 		end
 		-- drop this window's stale predictions only: other windows are

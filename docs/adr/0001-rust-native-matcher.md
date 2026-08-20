@@ -55,7 +55,7 @@ existing vim-regex path with identical behavior. Toolchain baseline: edition
   invariant is enforced by `tests/cross_validate_rust.lua` (strict equality +
   fuzz) and the e2e parity check. Every matcher change now touches two paths.
 - Rust data tables are generated from the Lua source of truth
-  (`scripts/export_rs.lua`) — the single-source pipeline must be used.
+  (`scripts/export_rs.py`) — the single-source pipeline must be used.
 - The plugin's MSRV tracks latest stable, which affects end-user builds;
   downgrading support for older toolchains is an accepted trade-off here.
 - CI and local toolchain now include a Rust component (mise-managed).

@@ -56,14 +56,14 @@ rust/
       tests/, benches/    cross checks and criterion benchmarks
     flash-cjk-search/     the JSON binary: stdin/stdout one-shot mode
                           + `serve` UDS server mode
-  data/                   generated Rust data (from scripts/export_rs.lua)
+  data/                   generated Rust data (from scripts/export_rs.py)
 ```
 
 The generated data under `rust/data/` comes from the Lua modules -- the
 single source of truth. Regenerate with:
 
 ```sh
-nvim -l scripts/export_rs.lua
+uv run scripts/export_rs.py
 ```
 
 ## Alternatives considered

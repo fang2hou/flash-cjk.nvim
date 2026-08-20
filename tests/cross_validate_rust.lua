@@ -3,7 +3,8 @@
 -- item (vim reports non-overlapping leftmost matches). Run:
 --   nvim --headless -l tests/cross_validate_rust.lua
 -- Requires the release binary: cargo build --release --manifest-path rust/Cargo.toml
-package.path = "./lua/?.lua;./lua/?/init.lua;.deps/flash.nvim/lua/?.lua;.deps/flash.nvim/lua/?/init.lua;" .. package.path
+package.path = "./lua/?.lua;./lua/?/init.lua;.deps/flash.nvim/lua/?.lua;.deps/flash.nvim/lua/?/init.lua;"
+	.. package.path
 
 local fc = require("flash-cjk")
 local rust = require("flash-cjk.rust")
@@ -20,9 +21,12 @@ if vim.fn.has("unix") == 1 then
 	vim.env.XDG_RUNTIME_DIR = (vim.env.TMPDIR or "/tmp") .. "/fcjk-xval-" .. vim.uv.os_getpid()
 	rust.reset_server_for_test()
 	rust.warmup()
-	assert(vim.wait(4000, function()
-		return rust.server_ready()
-	end, 10), "server transport failed to warm up")
+	assert(
+		vim.wait(4000, function()
+			return rust.server_ready()
+		end, 10),
+		"server transport failed to warm up"
+	)
 	print("transport: server (UDS)")
 else
 	print("transport: spawn (no UDS on this platform)")
@@ -70,10 +74,42 @@ local function rust_spans(pattern)
 end
 
 local patterns = {
-	"ni", "r", "ti", "kim", "gim", "dkss", "sha", "ho", "go", "kyo",
-	"nihongo", "aoi", "ue", "an", "han", "hak", "gkr", "seoul", "annyeo",
-	"ti\x01", "ti\x02", "ti\x04", "dkss\x04", "nih",
-	".", ",", "-", "?", "!", "[", "]", "a.", "ni,", "ho.", "dk,", "t-",
+	"ni",
+	"r",
+	"ti",
+	"kim",
+	"gim",
+	"dkss",
+	"sha",
+	"ho",
+	"go",
+	"kyo",
+	"nihongo",
+	"aoi",
+	"ue",
+	"an",
+	"han",
+	"hak",
+	"gkr",
+	"seoul",
+	"annyeo",
+	"ti\x01",
+	"ti\x02",
+	"ti\x04",
+	"dkss\x04",
+	"nih",
+	".",
+	",",
+	"-",
+	"?",
+	"!",
+	"[",
+	"]",
+	"a.",
+	"ni,",
+	"ho.",
+	"dk,",
+	"t-",
 }
 
 -- Strict comparison: both sides scan left-to-right non-overlapping, so
@@ -93,9 +129,18 @@ for _, p in ipairs(patterns) do
 			end
 		end
 	end
-	print(string.format("%-12s spans=%-2d %s", ("%q"):format(p):sub(1, 12), #vs, #vs == #rs and "identical" or "DIFF"))
+	print(
+		string.format(
+			"%-12s spans=%-2d %s",
+			("%q"):format(p):sub(1, 12),
+			#vs,
+			#vs == #rs and "identical" or "DIFF"
+		)
+	)
 end
-if fails > 0 then error(fails .. " cross-validation failures") end
+if fails > 0 then
+	error(fails .. " cross-validation failures")
+end
 print("CROSS-VALIDATION PASSED (strict equality)")
 
 -- ---------------------------------------------------------------------------
@@ -106,11 +151,11 @@ do
 	local checked = 0
 	for _, p in ipairs(patterns) do
 		local resp = rust.search(p, lines, langs)
-		local tags = (resp and resp.pred_langs) or nil
+		local tags = resp and resp.pred_langs
 		if tags == nil then
 			error(("protocol: pred_langs missing for %q"):format(p))
 		end
-		if #tags ~= #(resp.matches) then
+		if #tags ~= #(resp or {}).matches then
 			error(("protocol: pred_langs not parallel to matches for %q"):format(p))
 		end
 		for _, entry in ipairs(tags) do
@@ -131,10 +176,59 @@ end
 -- ---------------------------------------------------------------------------
 -- fuzz: random patterns and mixed-CJK lines, vim vs rust must agree
 math.randomseed(42) -- deterministic
-local alphabet = { "a", "e", "i", "o", "u", "n", "k", "s", "t", "h", "d", "r", "g", "b", "m", "y", "c", "l", "p", "z" }
+local alphabet = {
+	"a",
+	"e",
+	"i",
+	"o",
+	"u",
+	"n",
+	"k",
+	"s",
+	"t",
+	"h",
+	"d",
+	"r",
+	"g",
+	"b",
+	"m",
+	"y",
+	"c",
+	"l",
+	"p",
+	"z",
+}
 local soup = {
-	"日", "本", "語", "テ", "ス", "ト", "で", "す", "ち", "梯", "子", "韓", "国", "語",
-	"安", "녕", "하", "세", "요", "你", "好", "中", "文", "x", "y", "z", "0", "1", " ", " ",
+	"日",
+	"本",
+	"語",
+	"テ",
+	"ス",
+	"ト",
+	"で",
+	"す",
+	"ち",
+	"梯",
+	"子",
+	"韓",
+	"国",
+	"語",
+	"安",
+	"녕",
+	"하",
+	"세",
+	"요",
+	"你",
+	"好",
+	"中",
+	"文",
+	"x",
+	"y",
+	"z",
+	"0",
+	"1",
+	" ",
+	" ",
 }
 local function rand_line()
 	local n = math.random(8, 40)
@@ -227,7 +321,16 @@ for round = 1, 300 do
 		for i = 1, #vs do
 			if vs[i] ~= rs[i] then
 				fuzz_fails = fuzz_fails + 1
-				print(string.format("FUZZ SPAN round=%d pattern=%q #%d vim=%s rust=%s", round, p, i, vs[i], rs[i]))
+				print(
+					string.format(
+						"FUZZ SPAN round=%d pattern=%q #%d vim=%s rust=%s",
+						round,
+						p,
+						i,
+						vs[i],
+						rs[i]
+					)
+				)
 				break
 			end
 		end
@@ -257,4 +360,9 @@ end
 if fuzz_fails > 0 then
 	error(fuzz_fails .. " fuzz failures")
 end
-print(string.format("FUZZ CROSS-VALIDATION PASSED (300 rounds, strict equality, %d attributions)", attr_checked))
+print(
+	string.format(
+		"FUZZ CROSS-VALIDATION PASSED (300 rounds, strict equality, %d attributions)",
+		attr_checked
+	)
+)

@@ -14,32 +14,31 @@ typing its pinyin, romaji, or romanization — no IME switching. Built on
 
 </div>
 
-## Why
-
 Typing CJK text to jump to CJK text means fighting your IME mid-motion.
-flash-cjk keeps your hands in ASCII: `ni` lands on 日 / に / ニ, `r` hits 日
-by pinyin initial, `dkss` hits 안녕 by Dubeolsik keys — while plain letters
-still match literally, exactly like flash.nvim.
+flash-cjk keeps your hands in ASCII: `ni` lands on 你 / 日 / に / ニ, `r`
+hits 日 by pinyin initial, `dkss` hits 안녕 by Dubeolsik keys — while plain
+letters still match literally, exactly like flash.nvim.
 
 - In scope: Simplified Chinese pinyin (Xiaohe double-pinyin and initials),
   Japanese romaji (kanji readings plus kana, Hepburn and kunrei-shiki),
   Korean (RR romanization and Dubeolsik key sequences), literal ASCII — all
   simultaneously and independently toggleable
 - Out of scope: replacing flash.nvim's own features (treesitter jumps,
-  remote, …); IME integration; NFD Korean filenames (see known limitations)
+  remote, …); IME integration; NFD Korean filenames (see known limitations
+  under Features)
 - Status: actively developed
 
-## Install
+## 🚀 Usage
 
-Requires [flash.nvim](https://github.com/folke/flash.nvim); install with
-[lazy.nvim](https://github.com/folke/nvim-lazy):
+Requires [flash.nvim](https://github.com/folke/flash.nvim) and Neovim ≥ 0.10.
+Install with [lazy.nvim](https://github.com/folke/nvim-lazy):
 
 ```lua
 return {{
     "fang2hou/flash-cjk.nvim",
     event = "VeryLazy",
     dependencies = "folke/flash.nvim",
-    -- Optional Rust accelerator (see "Rust acceleration"): built on
+    -- Optional Rust accelerator (see "⚡ Performance"): built on
     -- install/update; without cargo the plugin silently uses the vim-regex
     -- path instead. Delete this line to skip the build entirely.
     build = "cargo build --release --manifest-path=rust/Cargo.toml",
@@ -75,8 +74,6 @@ return {{
 Not using lazy.nvim? Call `require("flash-cjk").setup({ ... })` yourself with
 the same options as `opts` above.
 
-## Use it
-
 Press `s`, type, and jump — same flow as flash.nvim. If your target shows no
 label yet, keep typing (like a search); labels use lowercase letters and never
 collide with a plausible next input letter for a visible match.
@@ -87,161 +84,101 @@ collide with a plausible next input letter for a visible match.
 Work in this repository. Read AGENTS.md at the repository root first and follow it.
 ```
 
-### Forcing a language mid-typing
+**Developing or benchmarking the plugin** requires [mise](https://mise.jdx.dev/)
+on macOS or Linux:
 
-While typing, press `C-c` / `C-j` / `C-k` / `C-e` to lock matching to
-Simplified Chinese / Japanese / Korean / English and recompute instantly:
-
-- `ti` matches both Simplified Chinese (梯/踢…) and Japanese (ち,
-  kunrei-shiki); after `C-c` only the Simplified Chinese readings remain —
-  ち no longer matches
-- Locks stack into the input string: **backspacing over the marker releases
-  it**; pressing another lock key switches directly
-- Literal English matching is unaffected while locked
-- Lock keys are configurable per language (`force_key`, or `false` to
-  disable) in the `languages` table — see below
-
-### Language configuration
-
-Each language is configured independently through the `languages` table —
-globally via setup, or per jump via a language-code array:
-
-```lua
-require("flash-cjk").setup({
-    languages = {
-        zhcn = {enabled = true, scheme = "xiaohe", force_key = "<C-c>"},
-        ja = {enabled = true, scheme = "roma", force_key = "<C-j>"},
-        ko = {enabled = true, scheme = "roma", force_key = "<C-k>"},
-        en = {enabled = true, force_key = "<C-e>"},  -- no scheme concept
-    },
-    mixed_input = true,
-    priority = { "ja", "zhcn" },  -- label order: ja matches first
-})
-
-require("flash-cjk").jump({ "ja", "ko", "en" })  -- this jump: no Simplified Chinese
+```bash
+mise install
+mise run test
 ```
 
-`scheme` accepts `"xiaohe"` for `zhcn` and `"roma"` for `ja`/`ko` (the only
-schemes today; more can plug in later); `en` matches literal ASCII, has no
-scheme concept and errors if given one. Entries also accept the `true`/`false`
-shorthand for `enabled`. `setup` deep-merges: unspecified fields keep their
-current value. `jump()` without an array uses the setup-enabled set; a given
-array fully decides that jump's set (schemes fall back to each language's
-default) and overrides the setup switches.
+`mise run` lists every other task (`check`, `e2e`, `codegen`, `format`); see
+[DEVELOPMENT.md](./DEVELOPMENT.md).
 
-`priority` orders label assignment by language: matches reachable through
-earlier-listed languages receive the earliest labels (a match several
-languages can interpret belongs to its highest-priority one), so targets in
-your primary language need the fewest label keys. Match sets and jump
-semantics are unchanged; unset keeps plain position order.
+<details>
+<summary>Rust accelerator: when you need it, when you don't</summary>
 
-Single-language users keep one language enabled. Punctuation follows the
-language switches: with `zhcn` off, `,` matches 、(Japanese) instead of ，
-(fullwidth comma); `。` is shared by zhcn/ja and always matches; `-` → ー
-belongs to `ja`.
+The `build =` line above builds the optional native matcher only when cargo
+is available; manual build: `cd rust && cargo build --release`. You do not
+need Rust: without the binary the plugin silently uses the vim-regex path
+with identical results (enforced by cross-validation). In sandboxed or
+restricted environments, delete the `build =` line — the pure-Lua path needs
+no compiler and spawns no processes.
 
-## Matching by language
+</details>
 
-### Simplified Chinese (zhcn)
+## 💡 Concepts
 
-Type the Xiaohe double-pinyin (小鹤双拼) two-key code, or a pinyin initial:
-`ni` → 你, `r` → 日. Every character is reachable by its two-key code, and a
-single letter matches any character whose pinyin starts with it. The
-registered scheme is `"xiaohe"` (see `scheme` under Language configuration) —
-the only one today; more can plug in later.
+- **Interpretations** — every keystroke chain is segmented into literal
+  letters and language codes (pinyin, romaji, romanization); each plausible
+  reading of the same input stays reachable at once. `ni` matches both
+  Simplified Chinese (你) and Japanese (日 / に / ニ).
+- **Language lock** — while typing, `C-c` / `C-j` / `C-k` / `C-e` lock
+  matching to Simplified Chinese / Japanese / Korean / English and recompute
+  instantly: after `C-c`, only the Simplified Chinese readings remain — ち
+  no longer matches. Locks stack into the input string, so **backspacing
+  over the marker releases it**; pressing another lock key switches
+  directly. Lock keys are configurable per language (`force_key`, or
+  `false` to disable).
+- **Mixed input** — a keystroke chain can be read part literally, part as
+  language codes. Typing `nn` reaches `日n` (romaji `n` + literal `n`); the
+  mirror text `n日` matches in every mode because literal heads are always
+  allowed. Turning `mixed_input = false` drops only the reverse shape
+  (language-then-literal) and cuts worst-case latency on long trilingual
+  inputs by 40–60% — keep the default unless long inputs visibly lag.
+- **Per-jump language set** — each language is configured independently
+  through the `languages` table (globally via `setup`, or per jump:
+  `jump({ "ja", "ko", "en" })` matches no Simplified Chinese for that one
+  jump). `setup` deep-merges; the `true`/`false` shorthand toggles
+  `enabled`. Punctuation follows the switches: with `zhcn` off, `,` matches
+  、(Japanese) instead of ，(fullwidth comma).
 
-### Japanese (ja)
+## ✨ Features
 
-Type romaji and it matches: `ni` hits 日, `ti` hits ち (kunrei-shiki). Kanji
-readings from Unicode Unihan (`kJapanese`/`On`/`Kun`, ~13,000 kanji) match by
-romaji prefix up to 3 letters (`n`/`ni`/`nic` all hit 日); kana match all
-common romanizations of their syllable (`si`/`shi`, `tu`/`tsu`); youon pairs
-match as one unit (`sha` → しゃ/シャ); `-` matches the long-vowel mark ー,
-`[`/`]` → 「」『』, `,` → 、, `!` → ！.
+- **Simplified Chinese (`zhcn`)** — type the Xiaohe double-pinyin
+  (小鹤双拼) two-key code, or a pinyin initial: `ni` → 你, `r` → 日. Every
+  character is reachable by its two-key code; a single letter matches any
+  character whose pinyin starts with it. Scheme: `"xiaohe"` (the only one
+  today; more can plug in later).
+- **Japanese (`ja`)** — romaji matching: `ni` hits 日, `ti` hits ち
+  (kunrei-shiki). Kanji readings from Unicode Unihan (~13,000 kanji) match
+  by romaji prefix up to 3 letters (`n`/`ni`/`nic` all hit 日); kana match
+  all common romanizations of their syllable (`si`/`shi`, `tu`/`tsu`);
+  youon pairs match as one unit (`sha` → しゃ/シャ); `-` matches ー,
+  `[`/`]` → 「」『』, `,` → 、, `!` → ！.
+- **Korean (`ko`)** — Dubeolsik (두벌식, the standard two-set keyboard)
+  sequences: `dks` → 안, `gkrry` → 학교, `dkswek` → 앉다. Or romanization:
+  RR (Revised Romanization of Korean, 로마자 표기법) plus common
+  McCune-Reischauer spellings (`kim`/`gim` → 김), matched per syllable by
+  prefix. Syllables decompose programmatically into jamo — no dictionary
+  data. Tense jamo need Shift on Dubeolsik — use romanization (`kk`)
+  instead; single-vowel segments work mid-input like Japanese vowels
+  (`ai` → 아이).
+- **English (`en`)** — plain ASCII matches literally, letter for letter,
+  exactly like flash.nvim's own search: code identifiers stay reachable
+  without any language interpretation. Even with `en` disabled, digits and
+  uppercase still match literally, and input no enabled language can
+  interpret (like `n.`) degrades to literal matching.
+- **Priority labels** — `priority = { "ja", "zhcn" }` orders label
+  assignment: matches reachable through earlier-listed languages receive
+  the earliest labels, so targets in your primary language need the fewest
+  label keys. Match sets and jump semantics are unchanged; unset keeps
+  plain position order.
 
-### Korean (ko)
+Known limitations: macOS stores Korean filenames in NFD (decomposed jamo);
+both matching paths target NFC precomposed syllables, so jumping in
+oil/netrw filename buffers won't match Korean filenames. Normal code and
+document buffers are NFC and unaffected.
 
-Type Dubeolsik (두벌식, the standard Korean two-set keyboard) sequences:
-`dkss` → 안녕, `gkrry` → 학교, `dkswek` → 앉다. Or type romanization: RR
-romanization (Revised Romanization of Korean, 로마자 표기법) plus common
-McCune-Reischauer spellings (`kim`/`gim` → 김), matched per syllable by
-prefix. Syllables decompose programmatically into jamo (initial × medial ×
-final) — no dictionary data. Tense jamo need Shift on Dubeolsik — use
-romanization (`kk`) instead; single-vowel segments work mid-input like
-Japanese vowels (`ai` → 아이).
+## ⚡ Performance
 
-### English (en)
-
-Plain ASCII matches literally, letter for letter, exactly like flash.nvim's
-own search — code identifiers stay reachable without any language
-interpretation. `en` has no scheme concept. Even with `en` disabled, digits
-and uppercase still match literally, and input no enabled language can
-interpret (like `n.`) degrades to literal matching.
-
-## Mixed input
-
-A keystroke chain can be read part literally, part as language codes; the
-flag decides how freely the two interleave within one interpretation.
-
-- On (default): every mixed interpretation stays reachable — including
-  targets where a literal letter follows a language segment.
-- Off (`mixed_input = false`): an interpretation, once it enters a
-  language segment, can no longer return to literal letters. Literal
-  heads keep working; only the reverse shape drops. Long trilingual
-  inputs lose 40–60% of their worst-case latency (`nini` falls from 59
-  interpretations to 31).
-- Recommendation: keep the default unless long inputs visibly lag while
-  typing — then turn it off.
-
-Example (zhcn+ja+en): typing `nn` reaches `日n` — 日 is the romaji prefix
-`n` (nichi), the trailing `n` is literal, a `[language][literal]` chain
-only the default mode keeps. The mirror text `n日` matches in both modes:
-literal letters at the head of a chain are always allowed.
-
-## FAQ
-
-- **Will it lag?** Short prefixes (1–2 letters) answer in ~0.5 ms median on
-  the built-in vim-regex path (0.1–0.9 ms with one language enabled). The
-  heavy case is long trilingual input on that path: up to ~30 ms mean with
-  p95 at 134–243 ms on the heaviest mixes. With the native matcher every
-  combination answers within ~2.5 ms mean (worst p95 ≈ 17 ms). See the
-  benchmark tables below.
-- **Must I install Rust?** No. The `build =` line builds the optional native
-  matcher only when cargo is available; without it the plugin silently uses
-  the vim-regex path with identical results (enforced by cross-validation).
-- **Does it cost CPU/battery?** The vim-regex path is in-process regex. The
-  native path keeps one persistent ~12 MB matcher server per user, alive
-  only while a Neovim instance uses it, plus a ~0.04 ms socket round trip
-  per keystroke — the footprint tracks how much you type.
-- **Sandboxed or restricted environment?** Delete the `build =` line: the
-  pure-Lua path needs no compiler and spawns no processes.
-- **When do I need the jump array form?** When one specific jump wants a
-  different enabled set than setup — temporarily excluding a language
-  (`jump({ "ja", "ko", "en" })`), or reaching a language you disabled
-  (`jump({ "zhcn", "en" })` still matches Simplified Chinese after
-  `zhcn = { enabled = false }` in setup).
-- **How do I change or disable a force_key?** In the `languages` table via
-  setup: `force_key = "<M-c>"` changes the key, `force_key = false`
-  disables that language's lock.
-
-## Rust acceleration (optional)
-
-An optional native matcher builds once and turns on automatically: on the
-benchmark below it flattens the worst case — the mean drops 8.5× overall,
-the p95 tail 6.7× overall and up to 27× on the heaviest mixes — and it keeps
-working on patterns whose regex alternation no longer compiles in Vim (E872).
-The `build =` line in the lazy spec above handles it; manual build:
-
-```sh
-cd rust && cargo build --release
-```
-
-Without the binary — or after repeated failures — the plugin transparently
-falls back to the pure-Lua vim-regex path with identical behavior, guaranteed
-by a strict item-by-item cross-validation suite. Details and measurements:
-[rust/README.md](rust/README.md).
-
-## Performance
+Short prefixes (1–2 letters) answer in ~0.5 ms median on the built-in
+vim-regex path (0.1–0.9 ms with one language enabled). The heavy case is
+long trilingual input on that path: up to ~30 ms mean with p95 at 134–243 ms
+on the heaviest mixes. The optional native matcher flattens the worst case —
+mean drops 8.5× overall, the p95 tail 6.7× (up to 27× on the heaviest mixes)
+— and keeps working on patterns whose regex alternation no longer compiles
+in Vim (E872). It turns on automatically once built.
 
 <p align="center">
   <img
@@ -316,7 +253,8 @@ is where it matters: the heaviest mixes (`ja`+`en`,
 `zhcn`+`ja`+`en`) drop from 134–243 ms p95 on vim-regex to 5.0–14.8 ms,
 and the overall p95 falls from 29.1 ms to 4.4 ms.
 
-### Background service (Unix, zero config)
+<details>
+<summary>Background service (Unix, zero config)</summary>
 
 When the binary is present, the plugin transparently keeps one matcher
 server per user:
@@ -328,24 +266,21 @@ server per user:
   server removes its socket and exits. The last instance out takes the
   server with it — no polling, no daemon management, no config.
 - **Memory**: one resident process at ~12.4 MB RSS, alive only while at
-  least one Neovim instance uses it.
+  least one Neovim instance uses it, plus a ~0.04 ms Unix domain socket
+  round trip per keystroke. CPU/battery footprint tracks how much you
+  type, not how often you launch processes.
 - **Automatic fallback**: a transport hiccup (timeout, crash) falls back
   to the per-keystroke spawn transport for that keystroke and revives
-  the server asynchronously; repeated failures trip the existing circuit
-  breaker down to the vim-regex path. Windows and over-long socket
-  paths (the `sun_path` cap) stay on the spawn transport.
+  the server asynchronously; repeated failures trip the circuit breaker
+  down to the vim-regex path. Windows and over-long socket paths (the
+  `sun_path` cap) stay on the spawn transport.
 
-**System impact.** The cost is a single ~12.4 MB resident process per
-user that exists only while you edit, plus a ~0.04 ms Unix domain
-socket round trip per keystroke. CPU/battery footprint tracks
-how much you type, not how often you launch processes. The binary is
-~1.8 MB, statically carries its data tables, and has no runtime
-dependencies. If the binary is missing, fails to build, or fails
-repeatedly at runtime, a circuit breaker trips and every keystroke
-transparently falls back to the vim-regex path — identical matches,
-enforced by the cross-validation suite. Prefer the pure vim-regex path
-(i.e. simply don't build the binary) when resident memory is scarce or
-process launches are restricted.
+The binary is ~1.8 MB, statically carries its data tables, and has no
+runtime dependencies. Prefer the pure vim-regex path (i.e. simply don't
+build the binary) when resident memory is scarce or process launches are
+restricted.
+
+</details>
 
 Reproduce on your own machine:
 
@@ -355,32 +290,18 @@ nvim -l benches/compare.lua # writes benches/results.json
 uv run benches/gen_svg.py   # regenerates assets/benchmark.svg
 ```
 
-## Known limitations
-
-- macOS stores Korean filenames in NFD (decomposed jamo); both matching
-  paths target NFC precomposed syllables, so jumping in oil/netrw filename
-  buffers won't match Korean filenames. Normal code and document buffers
-  are NFC and unaffected.
-
-## What to read next
+## 📚 Learn More
 
 | Goal                     | Read                                                                       |
 | ------------------------ | -------------------------------------------------------------------------- |
-| Develop and validate     | [DEVELOPMENT.md](./DEVELOPMENT.md)                                         |
 | Understand the system    | [ARCHITECTURE.md](./ARCHITECTURE.md)                                       |
+| Develop and validate     | [DEVELOPMENT.md](./DEVELOPMENT.md)                                         |
 | Contribute a change      | [CONTRIBUTING.md](./CONTRIBUTING.md)                                       |
 | Give it to an agent      | [AGENTS.md](./AGENTS.md)                                                   |
 | Native matcher design    | [rust/README.md](./rust/README.md)                                         |
 | Read in another language | [简体中文](README.zh.md) · [日本語](README.ja.md) · [한국어](README.ko.md) |
 
-## Environment requirements
-
-- Neovim ≥ 0.10 with [flash.nvim](https://github.com/folke/flash.nvim)
-- Optional recent Rust (≥ 1.97, cargo) for the native accelerator —
-  everything works without it
-- Development toolchain: managed by mise (see [DEVELOPMENT.md](./DEVELOPMENT.md))
-
-## License
+## 📄 License
 
 MIT — see [LICENSE](./LICENSE). Data derived from the
 [Unicode Unihan Database](https://www.unicode.org/) (Unicode License).

@@ -1,4 +1,6 @@
-*.luarc.json
+build/
 .deps/
 rust/target/
 tests/e2e/.repro/
+*.luarc.json
+__pycache__/

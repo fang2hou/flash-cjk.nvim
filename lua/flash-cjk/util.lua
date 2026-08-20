@@ -1,21 +1,19 @@
--- Small helpers shared across modules. No plugin dependencies.
-
 local M = {}
 
----Byte length of the UTF-8 character starting at byte offset `i`
+---Byte length of the UTF-8 character starting at byte offset `offset`
 ---(0 past the end), matching vim's byte-oriented string functions.
 ---@param str string
----@param i integer
+---@param offset integer
 ---@return integer
-function M.char_size(str, i)
-	local b = string.byte(str, i)
-	if not b then
+function M.char_size(str, offset)
+	local byte = string.byte(str, offset)
+	if not byte then
 		return 0
-	elseif b > 240 then
+	elseif byte > 240 then
 		return 4
-	elseif b > 225 then
+	elseif byte > 225 then
 		return 3
-	elseif b > 192 then
+	elseif byte > 192 then
 		return 2
 	end
 	return 1

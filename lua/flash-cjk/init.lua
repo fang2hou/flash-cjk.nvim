@@ -1,7 +1,6 @@
--- flash-cjk entry point: public API and orchestration. Configuration
--- lives in config.lua, the matching domain in match.lua and the
--- flash.nvim patches in patches.lua; this module wires them together
--- and re-exports the public names.
+-- Public API and orchestration. Configuration lives in config.lua, the
+-- matching domain in match.lua, the flash.nvim patches in patches.lua;
+-- this module wires them together and re-exports the public names.
 
 local config = require("flash-cjk.config")
 local match = require("flash-cjk.match")
@@ -11,39 +10,33 @@ local M = {}
 
 -- Re-exports: tests, e2e and user configs consume these from the
 -- module root. `config` is an assignment-transparent alias of the
--- config module's state table: both reads and rebinding
--- (fc.config = {...}) keep pointing at the live state, as they did
--- before the split.
+-- config module's state table.
 M.resolve_langs = config.resolve_langs
 M.make_mix_mode = match.make_mix_mode
 M.parse_forced = match.parse_forced
 setmetatable(M, {
-	__index = function(_, k)
-		if k == "config" then
+	__index = function(_, key)
+		if key == "config" then
 			return config.config
-		elseif k == "mix_mode" then
-			-- built on first access: the plugin itself never needs the
-			-- default mode (build_opts compiles one per jump), and an
-			-- eager build would load every language data table at
-			-- startup. Memoized raw so later reads skip this path.
-			local mode = match.make_mix_mode(
-				config.lang_flags(),
-				config.force_keys(config.config.languages)
-			)
+		elseif key == "mix_mode" then
+			-- built on first access: an eager build would load every
+			-- language data table at startup, and the plugin itself only
+			-- compiles per-jump modes in build_opts
+			local mode =
+				match.make_mix_mode(config.lang_flags(), config.force_keys(config.config.languages))
 			rawset(M, "mix_mode", mode)
 			return mode
 		end
 	end,
-	__newindex = function(t, k, v)
-		if k == "config" then
-			config.config = v
+	__newindex = function(table, key, value)
+		if key == "config" then
+			config.config = value
 			return
 		end
-		rawset(t, k, v)
+		rawset(table, key, value)
 	end,
 })
 
--- flash.nvim is only needed when actually jumping.
 local function get_flash()
 	return require("flash")
 end
@@ -62,16 +55,11 @@ local function build_opts(langs)
 			end
 		end
 	end
-	-- C-c never reaches flash's actions: getcharstr raises an interrupt
-	-- for it. Patch Util.get_char so that the interrupt is swallowed and
-	-- the raw byte is returned for action dispatch -- but only while a
-	-- C-c language lock is actually configured; everything else keeps
-	-- flash's original behavior.
+	-- C-c never reaches flash's actions (getcharstr raises an interrupt
+	-- for it), so the patch below re-routes it -- but only while a C-c
+	-- lock is configured; everything else keeps flash's behavior.
 	patches.get_char_patch()
 	patches.prompt_patch()
-	-- Rust fast path: when the binary exists it replaces the vim-regex
-	-- searcher entirely; per-keystroke failures fall back to the default
-	-- searcher inside the bridge (see lua/flash-cjk/rust.lua)
 	local defaults = {
 		labels = "asdfghjklqwertyuiopzxcvbnm",
 		search = {
@@ -84,9 +72,10 @@ local function build_opts(langs)
 	}
 	local rust_ok, rust = pcall(require, "flash-cjk.rust")
 	if rust_ok and rust.available() then
+		-- the binary replaces the vim-regex searcher entirely; failures
+		-- fall back to it inside the bridge (rust.lua)
 		defaults.matcher = rust.matcher(langs)
-		-- warm the persistent server (async, no-op without Unix/binary)
-		rust.warmup()
+		rust.warmup() -- async, no-op without Unix/binary
 	end
 	return defaults
 end
@@ -103,33 +92,23 @@ function M.remote(langs)
 	get_flash().remote(build_opts(M.resolve_langs(langs)))
 end
 
--- @param opts table
--- @field[opt] opts.languages table Per-language config, deep-merged
---   into the defaults: { zhcn = { enabled = true, scheme =
---   "xiaohe", force_key = "<C-c>" }, ja = ..., ko = ..., en = {
---   force_key = "<C-e>" } }; entries also accept the true/false
---   shorthand.
--- @field[opt] opts.mixed_input boolean Allow literal letters to follow language segments in one input chain (default true).
--- @field[opt] opts.priority string[] Language codes in label-assignment
---   priority order, e.g. { "ja", "zhcn" }: matches reachable through
---   earlier-listed languages receive their labels first (match sets
---   and jump semantics unchanged; unset keeps position order).
+---Configures the plugin. See the README (Language configuration,
+---Mixed input) for the accepted fields and their semantics.
+---@param opts table
 function M.setup(opts)
 	opts = opts or {}
-	local dirty = false
 	if opts.languages ~= nil then
 		if type(opts.languages) ~= "table" then
 			error("flash-cjk: languages must be a table")
 		end
 		for lang, value in pairs(opts.languages) do
-			local norm = config.normalize_language(lang, value)
-			M.config.languages[lang] = vim.tbl_deep_extend("force", {}, M.config.languages[lang], norm)
-			dirty = true
+			local normalized = config.normalize_language(lang, value)
+			M.config.languages[lang] =
+				vim.tbl_deep_extend("force", {}, M.config.languages[lang], normalized)
 		end
 	end
 	if type(opts.mixed_input) == "boolean" then
 		M.config.mixed_input = opts.mixed_input
-		dirty = true
 	end
 	if opts.priority ~= nil then
 		-- labeler-layer only: the mix mode does not read it
