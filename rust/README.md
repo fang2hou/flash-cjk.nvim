@@ -22,15 +22,13 @@ patterns get _faster_ (fewer matches), not slower.
 Measured on the full 15-combination matrix (1,050 generated windows,
 M4 Pro, per-keystroke cost incl. the transport):
 
-| series       | mean   | p50    | p95     |
-| ------------ | ------ | ------ | ------- |
-| vim-regex    | 8.1 ms | 0.4 ms | 30.1 ms |
-| rust, spawn  | 9.6 ms | 8.9 ms | 12.8 ms |
-| rust, server | 1.0 ms | 0.2 ms | 4.3 ms  |
+| series       | mean    | p50     | p95     |
+| ------------ | ------- | ------- | ------- |
+| vim-regex    | 8.2 ms  | 0.45 ms | 29.1 ms |
+| rust, server | 0.97 ms | 0.17 ms | 4.35 ms |
 
-The spawn transport pays ~0.9 ms process creation + ~8.2 ms data-table
-startup on every keystroke; the server pays them once at startup and
-then ~0.04 ms per UDS round trip.
+The server pays process creation and data-table startup once at its own
+start, then ~0.04 ms per UDS round trip.
 
 ## Build
 

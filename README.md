@@ -202,16 +202,17 @@ literal letters at the head of a chain are always allowed.
 
 - **Will it lag?** Short prefixes (1–2 letters) answer in ~0.5 ms median on
   the built-in vim-regex path (0.1–0.9 ms with one language enabled). The
-  heavy case is long trilingual input on that path: up to ~29 ms mean with
-  p95 at 138–245 ms on the heaviest mixes. With the native matcher every
-  combination stays in a flat 8–25 ms band. See the benchmark tables below.
+  heavy case is long trilingual input on that path: up to ~30 ms mean with
+  p95 at 134–243 ms on the heaviest mixes. With the native matcher every
+  combination answers within ~2.5 ms mean (worst p95 ≈ 17 ms). See the
+  benchmark tables below.
 - **Must I install Rust?** No. The `build =` line builds the optional native
   matcher only when cargo is available; without it the plugin silently uses
   the vim-regex path with identical results (enforced by cross-validation).
 - **Does it cost CPU/battery?** The vim-regex path is in-process regex. The
-  native matcher spawns one short-lived process per keystroke per visible
-  window (~9–12 ms wall time, almost all of it process startup) — the
-  footprint is bounded by your typing speed.
+  native path keeps one persistent ~12 MB matcher server per user, alive
+  only while a Neovim instance uses it, plus a ~0.04 ms socket round trip
+  per keystroke — the footprint tracks how much you type.
 - **Sandboxed or restricted environment?** Delete the `build =` line: the
   pure-Lua path needs no compiler and spawns no processes.
 - **When do I need the jump array form?** When one specific jump wants a
@@ -226,8 +227,8 @@ literal letters at the head of a chain are always allowed.
 ## Rust acceleration (optional)
 
 An optional native matcher builds once and turns on automatically: on the
-benchmark below it flattens the worst case — the p95 tail drops 2.3× overall
-and up to 10× on Japanese/Simplified Chinese + English mixes — and it keeps
+benchmark below it flattens the worst case — the mean drops 8.5× overall,
+the p95 tail 6.7× overall and up to 27× on the heaviest mixes — and it keeps
 working on patterns whose regex alternation no longer compiles in Vim (E872).
 The `build =` line in the lazy spec above handles it; manual build:
 
@@ -245,7 +246,7 @@ by a strict item-by-item cross-validation suite. Details and measurements:
 <p align="center">
   <img
     src="assets/benchmark.svg"
-    alt="Benchmark: per-keystroke cost of the vim-regex path vs the native Rust matcher over the persistent server across the full 15-combination language matrix, plus the spawn-to-server before/after"
+    alt="Benchmark: per-keystroke cost of the vim-regex path vs the native Rust matcher over the persistent server across the full 15-combination language matrix"
     width="720"
   />
 </p>
@@ -258,68 +259,62 @@ lines. Each row enables only its own languages, samples window text from
 those languages, and types 1–6 plausible keystrokes for exactly those
 languages (the `en`-only row is pure ASCII words); the seed is deterministic.
 
-**Rust (server)** is the default native path: one request per keystroke to
-the persistent matcher server (see below). **Rust (spawn)** is the fallback
-transport, one short-lived process per keystroke.
+**Rust (server)** is the native path live keystrokes use: one request per
+keystroke to the persistent matcher server (see below).
 
 Singles — one language enabled:
 
-| Window mix | vim-regex mean | Rust spawn | Rust server | Ratio | vim-regex p95 | spawn p95 | server p95 |
-| ---------- | -------------: | ---------: | ----------: | ----: | ------------: | --------: | ---------: |
-| `ja`       |        1.02 ms |    8.45 ms |     0.20 ms |  5.2× |        4.6 ms |   8.77 ms |    0.42 ms |
-| `zhcn`     |        0.22 ms |    8.94 ms |     0.15 ms |  1.4× |        0.6 ms |   9.49 ms |    0.21 ms |
-| `en`       |        0.09 ms |    8.42 ms |     0.17 ms |  0.5× |        0.1 ms |   8.95 ms |    0.22 ms |
-| `ko`       |        0.09 ms |    8.46 ms |     0.15 ms |  0.6× |        0.2 ms |   8.75 ms |    0.21 ms |
+| Window mix | vim-regex mean | Rust server | Ratio | vim-regex p95 | server p95 |
+| ---------- | -------------: | ----------: | ----: | ------------: | ---------: |
+| `ja`       |        1.22 ms |     0.16 ms |  7.8× |        4.6 ms |    0.40 ms |
+| `zhcn`     |        0.20 ms |     0.09 ms |  2.2× |        0.5 ms |    0.14 ms |
+| `en`       |        0.08 ms |     0.11 ms | 0.75× |        0.1 ms |    0.14 ms |
+| `ko`       |        0.08 ms |     0.10 ms | 0.81× |        0.2 ms |    0.16 ms |
 
 Pairs — two languages enabled:
 
-| Window mix    | vim-regex mean | Rust spawn | Rust server | Ratio | vim-regex p95 | spawn p95 | server p95 |
-| ------------- | -------------: | ---------: | ----------: | ----: | ------------: | --------: | ---------: |
-| `ja` + `en`   |       28.62 ms |    9.87 ms |     1.32 ms | 21.7× |      133.5 ms |  13.76 ms |    4.78 ms |
-| `ko` + `en`   |        4.82 ms |   10.57 ms |     2.18 ms |  2.2× |       34.9 ms |  25.43 ms |   16.80 ms |
-| `zhcn` + `en` |        4.26 ms |    9.88 ms |     1.29 ms |  3.3× |       42.6 ms |  20.83 ms |   11.85 ms |
-| `ja` + `ko`   |        1.10 ms |    8.50 ms |     0.22 ms |  5.1× |        3.9 ms |   8.91 ms |    0.38 ms |
-| `zhcn` + `ja` |        1.10 ms |    8.97 ms |     0.23 ms |  4.8× |        4.5 ms |   9.64 ms |    0.42 ms |
-| `zhcn` + `ko` |        0.25 ms |    8.91 ms |     0.20 ms |  1.3× |        0.6 ms |   9.41 ms |    0.31 ms |
+| Window mix    | vim-regex mean | Rust server | Ratio | vim-regex p95 | server p95 |
+| ------------- | -------------: | ----------: | ----: | ------------: | ---------: |
+| `ja` + `en`   |       29.99 ms |     1.35 ms | 22.2× |      134.1 ms |    5.00 ms |
+| `ko` + `en`   |        4.94 ms |     2.13 ms |  2.3× |       35.2 ms |   16.60 ms |
+| `zhcn` + `en` |        4.43 ms |     1.23 ms |  3.6× |       44.8 ms |   11.94 ms |
+| `ja` + `ko`   |        1.49 ms |     0.18 ms |  8.2× |        4.4 ms |    0.50 ms |
+| `zhcn` + `ja` |        1.04 ms |     0.16 ms |  6.4× |        3.6 ms |    0.34 ms |
+| `zhcn` + `ko` |        0.24 ms |     0.13 ms |  1.8× |        0.6 ms |    0.25 ms |
 
 Triples — three languages enabled:
 
-| Window mix           | vim-regex mean | Rust spawn | Rust server | Ratio | vim-regex p95 | spawn p95 | server p95 |
-| -------------------- | -------------: | ---------: | ----------: | ----: | ------------: | --------: | ---------: |
-| `zhcn` + `ja` + `en` |       28.77 ms |   11.34 ms |     2.52 ms | 11.4× |      244.9 ms |  24.19 ms |   14.88 ms |
-| `ja` + `ko` + `en`   |       20.08 ms |   10.77 ms |     2.18 ms |  9.2× |      125.8 ms |  25.50 ms |   16.01 ms |
-| `zhcn` + `ja` + `ko` |        8.83 ms |    9.52 ms |     0.70 ms | 12.6× |       46.3 ms |  10.71 ms |    2.18 ms |
-| `zhcn` + `ko` + `en` |        5.47 ms |   10.60 ms |     1.86 ms |  2.9× |       32.2 ms |  19.33 ms |   10.69 ms |
+| Window mix           | vim-regex mean | Rust server | Ratio | vim-regex p95 | server p95 |
+| -------------------- | -------------: | ----------: | ----: | ------------: | ---------: |
+| `zhcn` + `ja` + `en` |       29.12 ms |     2.43 ms | 12.0× |      243.4 ms |   14.79 ms |
+| `ja` + `ko` + `en`   |       19.48 ms |     2.10 ms |  9.3× |      129.7 ms |   15.47 ms |
+| `zhcn` + `ja` + `ko` |        9.07 ms |     0.67 ms | 13.6× |       47.5 ms |    2.40 ms |
+| `zhcn` + `ko` + `en` |        5.80 ms |     1.83 ms |  3.2× |       32.9 ms |   10.88 ms |
 
 All four languages enabled:
 
-| Window mix                  | vim-regex mean |  Rust spawn | Rust server |    Ratio | vim-regex p95 |    spawn p95 |  server p95 |
-| --------------------------- | -------------: | ----------: | ----------: | -------: | ------------: | -----------: | ----------: |
-| `zhcn` + `ja` + `ko` + `en` |       16.43 ms |    10.80 ms |     1.97 ms |     8.4× |       89.6 ms |     22.57 ms |    14.09 ms |
-| **Overall (1,050 windows)** |    **8.08 ms** | **9.60 ms** | **1.02 ms** | **7.9×** |   **30.1 ms** | **12.83 ms** | **4.27 ms** |
+| Window mix                  | vim-regex mean | Rust server |    Ratio | vim-regex p95 |  server p95 |
+| --------------------------- | -------------: | ----------: | -------: | ------------: | ----------: |
+| `zhcn` + `ja` + `ko` + `en` |       16.26 ms |     1.90 ms |     8.6× |       95.0 ms |    14.04 ms |
+| **Overall (1,050 windows)** |    **8.23 ms** | **0.97 ms** | **8.5×** |   **29.1 ms** | **4.35 ms** |
 
 **Methodology.** Each case runs one warmup pass and reports the median of 3
 measured passes (`vim.uv.hrtime`); rows are sorted by vim-regex mean within
 each group. Ratio is vim-regex mean ÷ Rust server mean — below 1× the
 pure-Lua path is faster. The vim-regex timing covers everything a live
 keystroke pays: pattern segmentation, alternation build, `vim.regex()`
-compile, and the match scan over every visible line. The Rust timings also
-cover everything: the server series is one UDS request to the persistent
-server (the live path), the spawn series is a full process launch per
-keystroke (the fallback transport). 0 of 1,050 patterns hit Vim's NFA
-capture-group limit (E872) in this run, but the Rust matcher keeps working
-when one does.
+compile, and the match scan over every visible line. The Rust timing is
+one UDS request to the persistent server — the exact transport live
+keystrokes use. 0 of 1,050 patterns hit Vim's NFA capture-group limit
+(E872) in this run, but the Rust matcher keeps working when one does.
 
-**How to read it.** The spawn transport always paid a fixed ~9 ms floor
-(~0.9 ms process creation + ~8.2 ms data-table startup per keystroke), which
-made the native path lose every light mix. The server pays those once at
-startup and then answers in a flat 0.15–2.5 ms band: 13 of 15 categories now
-favor Rust, and the two that do not (`ko`/`en` singles) sit at 0.09 vs
-0.15–0.17 ms — sub-0.2 ms either way. The tail is where it matters: the
-heaviest mixes (`ja`+`en`, `zhcn`+`ja`+`en`) drop from 133–245 ms p95 on
-vim-regex to 4.8–14.9 ms, and the overall p95 falls from 30.1 ms to 4.3 ms.
-Spawn → server: 9.60 → 1.02 ms mean (9.4×), p50 8.89 → 0.23 ms, p95
-12.8 → 4.3 ms.
+**How to read it.** The server pays process creation and data-table
+startup once at its own start, then answers in a flat 0.09–2.5 ms band:
+13 of 15 categories favor Rust, and the two that do not (`en`/`ko`
+singles) sit at 0.08 vs 0.10–0.11 ms — sub-0.2 ms either way. The tail
+is where it matters: the heaviest mixes (`ja`+`en`,
+`zhcn`+`ja`+`en`) drop from 134–243 ms p95 on vim-regex to 5.0–14.8 ms,
+and the overall p95 falls from 29.1 ms to 4.4 ms.
 
 ### Background service (Unix, zero config)
 
@@ -340,10 +335,9 @@ server per user:
   breaker down to the vim-regex path. Windows and over-long socket
   paths (the `sun_path` cap) stay on the spawn transport.
 
-**System impact.** Instead of one short-lived ~9–12 ms process per
-keystroke per visible window, the cost is a single ~12.4 MB resident
-process per user that exists only while you edit, plus a ~0.04 ms Unix
-domain socket round trip per keystroke. CPU/battery footprint now tracks
+**System impact.** The cost is a single ~12.4 MB resident process per
+user that exists only while you edit, plus a ~0.04 ms Unix domain
+socket round trip per keystroke. CPU/battery footprint tracks
 how much you type, not how often you launch processes. The binary is
 ~1.8 MB, statically carries its data tables, and has no runtime
 dependencies. If the binary is missing, fails to build, or fails

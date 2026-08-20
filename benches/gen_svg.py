@@ -40,7 +40,6 @@ BORDER = "#d1d9e0"
 TRACK = "#eff2f5"
 VIM_COLOR = "#bf8700"  # muted amber — the pure-Lua vim-regex path
 RUST_COLOR = "#1a7f37"  # green — the native Rust matcher over the persistent server
-SPAWN_COLOR = "#8c959f"  # gray — the per-keystroke spawn transport (before)
 PANEL_BG = "#f6f8fa"
 
 LANG_NAMES = {
@@ -246,9 +245,8 @@ def main() -> None:
     ty += 4
     parts.append(
         text(PANEL_X + 16, ty,
-             f"Rust floor: {fmt_ms(meta.get('process_spawn_ms', 0))} ms "
-             f"spawn + {fmt_ms(meta.get('binary_startup_ms', 0))} ms "
-             "startup", 9.5, MUTED)
+             f"UDS round-trip floor: {fmt_ms(meta.get('uds_roundtrip_ms', 0))} ms",
+             9.5, MUTED)
     )
     parts.append(
         text(PANEL_X + 16, ty + 15,
@@ -315,54 +313,6 @@ def main() -> None:
                 y += 20
             y += 7
 
-    # ------------------------------------------------- spawn -> server panel
-    # the headline change of the server transport: the per-keystroke
-    # process floor is gone. Three metric groups, spawn vs server bars
-    # on one shared scale per group.
-    y += 18
-    parts.append(hline(LEFT, RIGHT, y, BORDER))
-    y += 26
-    parts.append(text(LEFT, y, "Process overhead eliminated: spawn vs server",
-                      15, INK, 700))
-    parts.append(
-        text(RIGHT, y, "same 1,050 cases · per-keystroke cost of the Rust path",
-             10, FAINT, 400, "end")
-    )
-    y += 14
-    groups_panel = [
-        ("mean", overall["rust_spawn_ms"]["mean"], overall["rust_server_ms"]["mean"]),
-        ("p50", overall["rust_spawn_ms"]["p50"], overall["rust_server_ms"]["p50"]),
-        ("p95", overall["rust_spawn_ms"]["p95"], overall["rust_server_ms"]["p95"]),
-    ]
-    col_w = BODY / 3
-    for i, (name, spawn_ms, server_ms) in enumerate(groups_panel):
-        cx = LEFT + i * col_w + col_w / 2
-        parts.append(text(LEFT + i * col_w + col_w / 2, y, name, 12, INK, 700,
-                          "middle"))
-        ceiling = max(spawn_ms, server_ms) * 1.06
-        bar_area = col_w - 90
-        bx = LEFT + i * col_w + 45
-        bw_sp = max(6.0, bar_area * spawn_ms / ceiling)
-        bw_sv = max(6.0, bar_area * server_ms / ceiling)
-        parts.append(rounded(bx, y + 12, bar_area, 13, 6, TRACK))
-        parts.append(rounded(bx, y + 12, bw_sp, 13, 6, SPAWN_COLOR))
-        parts.append(text(bx + bar_area + 8, y + 23,
-                          f"spawn {fmt_ms(spawn_ms)} ms", 10, MUTED, 700))
-        parts.append(rounded(bx, y + 33, bar_area, 13, 6, TRACK))
-        parts.append(rounded(bx, y + 33, bw_sv, 13, 6, RUST_COLOR))
-        parts.append(text(bx + bar_area + 8, y + 44,
-                          f"server {fmt_ms(server_ms)} ms", 10, RUST_COLOR, 700))
-    y += 62
-    spawn_drop = (1 - overall["rust_server_ms"]["mean"]
-                  / overall["rust_spawn_ms"]["mean"]) * 100
-    parts.append(
-        text(LEFT, y,
-             f"mean {fmt_x(overall['rust_spawn_ms']['mean'] / overall['rust_server_ms']['mean'])} faster · "
-             f"{spawn_drop:.0f}% of the spawn cost was process creation + "
-             "data-table startup, paid once at server start instead",
-             10, MUTED)
-    )
-    y += 16
 
     # ---------------------------------------------------------------- footnote
     fy = y + 10
@@ -377,8 +327,6 @@ def main() -> None:
         "of 1-6 plausible keystrokes · deterministic seed.",
         "Per case: warmup pass, then the median of 3 passes. Rust rides "
         "the persistent server (one UDS request per keystroke).",
-        "The spawn panel keeps the per-keystroke process transport "
-        "(vim.system + JSON), the fallback path.",
         f"Short prefixes favor vim-regex on the lightest singles "
         f"(p50 {fmt_ms(overall['vim_ms']['p50'])} vs "
         f"{fmt_ms(overall['rust_server_ms']['p50'])} ms); richer mixes "
@@ -411,9 +359,9 @@ def main() -> None:
     svg_parts = [
         f"<svg xmlns='http://www.w3.org/2000/svg' width='{W}' height='{H}' "
         f"viewBox='0 0 {W} {H}' role='img' "
-        "aria-label='Benchmark: vim-regex path versus native Rust matcher "
-        "across the full 15-combination language matrix, per-keystroke "
-        "cost'>",
+        "aria-label='Benchmark: vim-regex path versus the native Rust "
+        "matcher over the persistent server across the full "
+        "15-combination language matrix, per-keystroke cost'>",
         f"<defs><style>{font_css}text{{font-family:'InterBench',Inter,"
         "'Helvetica Neue',Arial,sans-serif;}}</style></defs>",
     ]
