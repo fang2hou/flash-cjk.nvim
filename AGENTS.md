@@ -13,7 +13,7 @@ mise install                 # set up the toolchain (rust, neovim, python+uv, pr
 mise run check               # fast validation: rustfmt, clippy, markdown/toml formatting — run before every commit
 mise run test                # check + cargo test + lua suite + rust/vim parity cross-validation
 mise run e2e                 # check + LazyVim-style end-to-end repro (clones .deps on first run)
-mise run codegen             # regenerate jaData.lua from Unihan + sync rust data from lua
+mise run codegen             # regenerate lang/ja/data.lua from Unihan + sync rust data from lua
 nvim --headless +"lua dofile('tests/run.lua')" +qa!                # lua suite alone
 nvim --headless -l tests/cross_validate_rust.lua                   # parity check alone
 cargo build --release --manifest-path rust/Cargo.toml              # native matcher binary
@@ -45,13 +45,17 @@ Project-specific overrides:
 - `lua/flash-cjk/` — plugin core: `init.lua` (public API and orchestration),
   `config.lua`/`match.lua`/`patches.lua`/`util.lua` (config state, matching
   domain, flash patches, shared helpers), `labeler.lua`, `rust.lua` (native
-  matcher bridge with fallback circuit breaker),
-  `zhcnData.lua`/`jaData.lua`/`zhcnRev.lua`/`ja.lua`/`ko.lua` (data and per-language logic)
+  matcher bridge with fallback circuit breaker)
+- `lua/flash-cjk/lang/` — per-language engine folders behind one lazy
+  registry (`lang/init.lua`, uniform `pattern`/`strs`/`comma` surface):
+  each `lang/<code>/` holds `init.lua` (the engine) and `data.lua` (its
+  tables; `lang/ja/data.lua` is generated); engines load on first use,
+  self-checks run only in tests, never in the user's runtime
 - `rust/` — optional native matcher: workspace with `flash-cjk-core` (lib) and
   `flash-cjk-search` (stdin/stdout JSON binary); generated data lives in
   `rust/data/` and `flash-cjk-core/src/data/`
 - `tests/` — `run.lua` (behavior suite), `cross_validate_rust.lua` (strict rust↔vim-regex parity and fuzz), `e2e/` (LazyVim repro harness)
-- `scripts/` — data generators: `gen_jp_data.py` (Unihan → jaData.lua), `export_rs.lua` (lua → rust data)
+- `scripts/` — data generators: `gen_jp_data.py` (Unihan → lang/ja/data.lua), `export_rs.lua` (lua → rust data)
 
 ## Boundaries
 
@@ -64,7 +68,7 @@ Always:
 
 Never:
 
-- Hand-edit `lua/flash-cjk/jaData.lua` — regenerate with `uv run scripts/gen_jp_data.py`
+- Hand-edit `lua/flash-cjk/lang/ja/data.lua` — regenerate with `uv run scripts/gen_jp_data.py`
 - Hand-edit generated data (`rust/data/`, `rust/crates/flash-cjk-core/src/data/`) —
   regenerate with `nvim -l scripts/export_rs.lua`
 - Change language-lock marker bytes (`\x01/\x02/\x04/\x05`) without updating

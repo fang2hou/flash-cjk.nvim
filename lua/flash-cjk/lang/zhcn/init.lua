@@ -1,6 +1,27 @@
-local zhcn = require("flash-cjk.zhcnData")
+-- Simplified Chinese engine (lang/ registry member): xiaohe
+-- double-pinyin two-key codes and single pinyin initials. The pattern
+-- tables live in data.lua; below, the reverse lookups the labeler
+-- needs (character -> spellings) are built from those same tables.
+local data = require("flash-cjk.lang.zhcn.data")
+local char_size = require("flash-cjk.util").char_size
 
 local M = {}
+
+M.comma = data.comma -- punctuation map (。 is shared with ja)
+
+---Regex fragment for a 1-2 letter input segment: a two-key xiaohe
+---code, or a single pinyin initial letter. nil when nothing matches.
+---@param seg string
+---@return string?
+function M.pattern(seg)
+	if #seg == 1 then
+		return data.char1patterns[seg]
+	end
+	return data.char2patterns[seg]
+end
+
+-- ------------------------------------------------------------------
+-- labeler support: reverse lookups (character -> pinyin spellings)
 
 local py_table = {}
 local mt = {}
@@ -17,9 +38,7 @@ function py_table:find(char)
 	return self[char]
 end
 
-local char_size = require("flash-cjk.util").char_size
-
-local function utf8_len(str) --获取中文字符长度
+local function utf8_len(str)
 	local len = 0
 	local currentIndex = 1
 	while currentIndex <= #str do
@@ -29,7 +48,7 @@ local function utf8_len(str) --获取中文字符长度
 	return len
 end
 
-local function utf8_sub(str, startChar, numChars) --截取中文字符串
+local function utf8_sub(str, startChar, numChars)
 	local startIndex = 1
 	while startChar > 1 do
 		startIndex = startIndex + char_size(str, startIndex)
@@ -53,7 +72,7 @@ local function init_py_table()
 	-- and the Rust CN_REVERSE table, so predictions and language
 	-- attribution agree across paths
 	for _, table_name in ipairs({ "char1patterns", "char2patterns" }) do
-		for k, v in pairs(zhcn[table_name]) do
+		for k, v in pairs(data[table_name]) do
 			local start_char, end_char = v:find("%[(.-)%]")
 			v = v:sub(start_char + 1, end_char - 1)
 			for i = 1, utf8_len(v) do
@@ -62,7 +81,7 @@ local function init_py_table()
 			end
 		end
 	end
-	for k, v in pairs(zhcn.comma) do
+	for k, v in pairs(data.comma) do
 		local start_char, end_char = v:find("%[(.-)%]")
 		v = v:sub(start_char + 1, end_char - 1)
 		for i = 1, utf8_len(v) do
@@ -85,11 +104,15 @@ local function append_to_pinyins(pinyins, suffixes)
 	return result
 end
 
-function M.pinyin(chars)
+---All pinyin spellings the given text could have been typed as
+---(labeler predictions). Characters without a known reading pass
+---through as-is.
+---@param text string
+---@return string[]
+function M.strs(text)
 	local pinyins = {}
-	for i = 1, utf8_len(chars) do
-		local char = utf8_sub(chars, i, 1)
-		--要寻找的字符串
+	for i = 1, utf8_len(text) do
+		local char = utf8_sub(text, i, 1)
 		if string.len(char) == 1 then
 			pinyins = append_to_pinyins(pinyins, { char })
 		else
@@ -105,4 +128,5 @@ function M.pinyin(chars)
 end
 
 init_py_table()
+
 return M

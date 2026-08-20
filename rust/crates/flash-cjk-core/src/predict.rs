@@ -1,6 +1,6 @@
 //! Next-letter prediction for the labeler, mirroring the Lua side
-//! (`labeler.match_strs` + `pinyin.pinyin` + `jp.romaji_strs` +
-//! `ko.strs`): enumerate the spellings the matched text (plus the
+//! (`labeler.match_strs` + `lang.zhcn.strs` + `lang.ja.strs` +
+//! `lang.ko.strs`): enumerate the spellings the matched text (plus the
 //! character right after it) could have been typed as, keep those that
 //! start with the current clean pattern, and collect the letter that
 //! follows it. Every prediction carries the language whose engine
@@ -70,8 +70,8 @@ impl Engine {
 }
 
 /// Expands `text` under one engine (per-character cartesian product),
-/// capped like the Lua engines (`romaji_strs`/`ko.strs` cap at 64;
-/// `pinyin.pinyin` is uncapped but match texts are a few chars long).
+/// capped like the Lua engines (`lang.ja.strs`/`lang.ko.strs` cap at 64;
+/// `lang.zhcn.strs` is uncapped but match texts are a few chars long).
 fn engine_spellings(text: &str, engine: Engine, capped: bool) -> Vec<String> {
     let mut strs: Vec<String> = vec![String::new()];
     for ch in text.chars() {

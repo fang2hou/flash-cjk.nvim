@@ -24,8 +24,8 @@ setup_rtp()
 
 local fc = require("flash-cjk")
 local cfg = require("flash-cjk.config")
-local ja = require("flash-cjk.ja")
-local ko = require("flash-cjk.ko")
+local ja = require("flash-cjk.lang.ja")
+local ko = require("flash-cjk.lang.ko")
 
 local passed, failed = 0, 0
 local function ok(cond, msg)
@@ -106,6 +106,11 @@ for _, s in ipairs(ko_strs) do
 end
 ok(k1 and k2, "ko.strs(안녕) predicts annyeong and dkssud")
 
+-- ko self-check: hand-written jamo facts, asserted here instead of at
+-- module load (the user's runtime never executes them)
+local ok_sc, err_sc = pcall(ko.self_check)
+ok(ok_sc, "ko.self_check: hand-written facts hold (" .. tostring(err_sc) .. ")")
+
 -- alpha_mixing = false: pure chains only, still matches everything CJK
 local pure = fc.make_mix_mode({ zhcn = true, ja = true, ko = true, en = true, alpha_mixing = false })
 ok(matches(pure, "kim", "김"), "pure: kim matches 김")
@@ -178,23 +183,23 @@ ok(matches(mixed, ",", "，"), "mixed: comma matches ，")
 -- ---------------------------------------------------------------------------
 -- labeler reading prediction
 
-local strs = ja.romaji_strs("日本")
+local strs = ja.strs("日本")
 local found = false
 for _, s in ipairs(strs) do
 	if s == "nichihon" then
 		found = true
 	end
 end
-ok(found, "romaji_strs(日本) includes nichihon")
+ok(found, "ja.strs(日本) includes nichihon")
 
-local sha_strs = ja.romaji_strs("しゃ")
+local sha_strs = ja.strs("しゃ")
 found = false
 for _, s in ipairs(sha_strs) do
 	if s == "sha" then
 		found = true
 	end
 end
-ok(found, "romaji_strs(しゃ) includes sha (youon merge)")
+ok(found, "ja.strs(しゃ) includes sha (youon merge)")
 
 -- ---------------------------------------------------------------------------
 -- flash integration: real State with our search mode + labeler

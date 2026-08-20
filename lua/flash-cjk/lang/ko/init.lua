@@ -1,4 +1,4 @@
--- Korean (Hangul) support for flash-cjk.
+-- Korean (Hangul) engine for flash-cjk (lang/ registry member).
 -- Two input interpretations are matched simultaneously:
 --   * romanization prefixes (Revised Romanization + common
 --     McCune-Reischauer variants: gim/kim, bak/pak, ri/lee, tae/dae)
@@ -6,11 +6,19 @@
 --
 -- Every matcher emits code-point *range* classes ([가-깣]) because
 -- Hangul syllables are combinatorially encoded: L*588 + V*28 + T.
--- Sino-graphic hand-written jamo tables proved error-prone, so the
--- tables below are aligned by 0-based L/V/T index and cross-checked
--- by self_check() at load time.
+-- The jamo tables in data.lua are aligned by 0-based L/V/T index; the
+-- hand-written facts are verified through M.self_check (called by
+-- tests/run.lua) -- never at load time in a user's runtime.
+
+local jamo = require("flash-cjk.lang.ko.data")
+local L_ROMA, V_ROMA, T_ROMA = jamo.l_roma, jamo.v_roma, jamo.t_roma
+local L_KEYS, V_KEYS, T_KEYS = jamo.l_keys, jamo.v_keys, jamo.t_keys
 
 local M = {}
+
+-- Exported for scripts/export_rs.lua, which mirrors these tables into
+-- Rust; the Lua tables remain the single source of truth.
+M.jamo = jamo
 
 local SYL_BASE = 0xAC00
 
@@ -21,83 +29,6 @@ local function decompose(ch)
 	local cp = vim.fn.char2nr(ch) - SYL_BASE
 	return math.floor(cp / 588), math.floor((cp % 588) / 28), cp % 28
 end
-
--- Romanization (Revised Romanization; initials carry McCune-Reischauer
--- variants for the ambiguous consonants), indexed by 0-based L/V/T.
-local L_ROMA = {
-	{ "g", "k" }, -- ㄱ
-	{ "kk" }, -- ㄲ
-	{ "n" }, -- ㄴ
-	{ "d", "t" }, -- ㄷ
-	{ "tt" }, -- ㄸ
-	{ "r", "l" }, -- ㄹ
-	{ "m" }, -- ㅁ
-	{ "b", "p" }, -- ㅂ
-	{ "pp" }, -- ㅃ
-	{ "s" }, -- ㅅ
-	{ "ss" }, -- ㅆ
-	{ "" }, -- ㅇ (silent initial)
-	{ "j" }, -- ㅈ
-	{ "jj" }, -- ㅉ
-	{ "ch" }, -- ㅊ
-	{ "k" }, -- ㅋ
-	{ "t" }, -- ㅌ
-	{ "p" }, -- ㅍ
-	{ "h" }, -- ㅎ
-}
-local V_ROMA = {
-	"a", "ae", "ya", "yae", "eo", "e", "yeo", "ye", "o", "wa", "wae", "oe", "yo",
-	"u", "wo", "we", "wi", "yu", "eu", "ui", "i",
-}
-local T_ROMA = {
-	"", "k", "k", "ks", "n", "nj", "nh", "t", "l", "lg", "lm", "lb", "ls", "lt",
-	"lp", "lh", "m", "p", "ps", "s", "s", "ng", "t", "t", "k", "t", "p", "t",
-}
-
--- Two-set key sequences by the same 0-based L/V/T index.
--- nil entries are the tense (shift) jamo that plain lowercase typing
--- cannot produce; those syllables are still reachable via romanization.
-local L_KEYS = {
-	[0] = "r", -- ㄱ
-	nil, -- ㄲ (shift)
-	"s", -- ㄴ
-	"e", -- ㄷ
-	nil, -- ㄸ (shift)
-	"f", -- ㄹ
-	"a", -- ㅁ
-	"q", -- ㅂ
-	nil, -- ㅃ (shift)
-	"t", -- ㅅ
-	nil, -- ㅆ (shift)
-	"d", -- ㅇ
-	"w", -- ㅈ
-	nil, -- ㅉ (shift)
-	"c", -- ㅊ
-	"z", -- ㅋ
-	"x", -- ㅌ
-	"v", -- ㅍ
-	"g", -- ㅎ
-}
-local V_KEYS = {
-	[0] = "k", "o", "i", nil, "j", "p", "u", nil, "h", "hk", "ho", "hl", "y",
-	"n", "nj", "np", "nl", "b", "m", "ml", "l",
-}
-local T_KEYS = {
-	[0] = "", "r", nil, "rt", "s", "sw", "sg", "e", "f", "fr", "fa", "fq",
-	"ft", "fx", "fv", "fg", "a", "q", "qt", "t", nil, "d", "w", "c", "z", "x",
-	"v", "g",
-}
-
--- Exported for scripts/export_rs.lua, which mirrors these tables into
--- Rust; the Lua arrays remain the single source of truth.
-M.jamo = {
-	l_roma = L_ROMA,
-	v_roma = V_ROMA,
-	t_roma = T_ROMA,
-	l_keys = L_KEYS,
-	v_keys = V_KEYS,
-	t_keys = T_KEYS,
-}
 
 -- ------------------------------------------------------------------
 -- prefix tables: romaji / key prefix -> regex range class
@@ -235,7 +166,7 @@ function M.strs(text, cap)
 end
 
 -- ------------------------------------------------------------------
--- self-checks: hand-written facts are asserted, not trusted
+-- self-checks: hand-written facts, asserted by tests/run.lua
 
 local function assert_eq(actual, expected, what)
 	if actual ~= expected then
@@ -277,6 +208,8 @@ local function self_check()
 	assert_eq(roma_of("울"), "ul", "울 = ul")
 	assert_eq(roma_of("한"), "han", "한 = han")
 end
-self_check()
+
+-- Test hook: the suite asserts these; user runtimes never execute them.
+M.self_check = self_check
 
 return M
