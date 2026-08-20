@@ -19,6 +19,8 @@
 - 🇯🇵 **日语**：罗马字
 - 🇰🇷 **韩语**：두벌식（Dubeolsik）或罗马字
 
+https://github.com/user-attachments/assets/37599dab-b0c6-4d90-8463-cb4706841ac3
+
 ## 🚀 安装
 
 要求 Neovim ≥ 0.10 和 [flash.nvim](https://github.com/folke/flash.nvim)；Rust toolchain 为可选依赖，仅用于编译原生匹配器。使用 [lazy.nvim](https://github.com/folke/lazy.nvim) 安装：

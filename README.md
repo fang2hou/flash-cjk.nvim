@@ -19,6 +19,8 @@ In addition to standard flash.nvim matching, it supports the following input sch
 - 🇯🇵 **Japanese**: romaji
 - 🇰🇷 **Korean**: Dubeolsik (두벌식) or romanization
 
+https://github.com/user-attachments/assets/37599dab-b0c6-4d90-8463-cb4706841ac3
+
 ## 🚀 Installation
 
 Requires Neovim ≥ 0.10 and [flash.nvim](https://github.com/folke/flash.nvim). The Rust toolchain is optional and is only needed to build the native matcher. Install with [lazy.nvim](https://github.com/folke/lazy.nvim):
