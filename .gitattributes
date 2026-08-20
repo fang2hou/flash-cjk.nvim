@@ -1,7 +1,15 @@
+# Language statistics: count only hand-written sources.
 * -linguist-detectable
 lua/** linguist-detectable
 rust/crates/** linguist-detectable
 tests/** linguist-detectable
 scripts/** linguist-detectable
+
+# Generated data and toolchain artifacts: hidden from language stats,
+# collapsed in diffs.
 **/Cargo.lock linguist-generated
+lua/flash-cjk/lang/**/data.json linguist-generated
 rust/data/** linguist-generated
+rust/crates/flash-cjk-core/src/data/** linguist-generated
+benches/results.json linguist-generated
+assets/benchmark.svg linguist-generated
