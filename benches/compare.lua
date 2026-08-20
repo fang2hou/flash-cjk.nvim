@@ -27,8 +27,8 @@ package.path = "./lua/?.lua;./lua/?/init.lua;" .. package.path
 
 local rust = require("flash-cjk.rust")
 local fc = require("flash-cjk")
-local zhcn_data = require("flash-cjk.lang.zhcnData")
-local ja_data = require("flash-cjk.lang.jaData")
+local zhcn_data = require("flash-cjk.lang.zhcn.data")
+local ja_data = require("flash-cjk.lang.ja.data")
 local ko = require("flash-cjk.lang.ko")
 
 if not rust.available() then

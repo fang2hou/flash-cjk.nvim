@@ -1,7 +1,9 @@
 -- Language engine registry: the single access point to the per-language
--- matching engines. Every lang/<code>.lua module implements the same
--- surface, so consumers (match.lua's pattern compiler, labeler.lua's
--- predictions) never require an engine directly:
+-- matching engines. Each language owns one folder, lang/<code>/, whose
+-- init.lua is the engine and data.lua its tables; every engine
+-- implements the same surface, so consumers (match.lua's pattern
+-- compiler, labeler.lua's predictions) never require an engine
+-- directly:
 --   pattern(seg)        -> string?   vim regex fragment for one input
 --                                segment, nil when nothing matches
 --   strs(text, cap?)    -> string[]  every spelling the matched text
