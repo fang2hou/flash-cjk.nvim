@@ -1,16 +1,17 @@
 [tools]
 rust = "stable"
-python = "3.12"
 uv = "latest"
 neovim = "latest"
 prek = "latest"
 cocogitto = "latest"
 taplo = "latest"
 oxfmt = "latest"
+stylua = "latest"
+lua-language-server = "latest"
 
 [tasks.check]
-description = "fast validation: rustfmt + clippy + markdown/toml formatting"
-depends = ["fmt", "clippy", "fmt-md", "fmt-toml"]
+description = "fast validation: rustfmt, clippy, stylua, lua typecheck, md/toml formatting"
+depends = ["fmt", "clippy", "fmt-lua", "typecheck", "fmt-md", "fmt-toml"]
 
 [tasks.fmt]
 hide = true
@@ -26,14 +27,26 @@ run = "cargo clippy --all-targets -- -D warnings"
 hide = true
 run = "oxfmt --check $(git ls-files '*.md')"
 
+[tasks.fmt-lua]
+hide = true
+run = "stylua --check $(git ls-files '*.lua')"
+
+[tasks.typecheck]
+hide = true
+run = """
+nvim --headless -l scripts/gen_luarc.lua
+lua-language-server --check=. --checklevel=Warning --logpath=build
+"""
+
 [tasks.fmt-toml]
 hide = true
 run = "taplo format --check $(git ls-files '*.toml')"
 
 [tasks.format]
-description = "format rust, markdown, and toml in place"
+description = "format rust, lua, markdown, and toml in place"
 run = """
 (cd rust && cargo fmt --all)
+stylua $(git ls-files '*.lua')
 oxfmt --write $(git ls-files '*.md')
 taplo format $(git ls-files '*.toml')
 """
@@ -53,7 +66,7 @@ depends = ["check"]
 run = "tests/e2e/run.sh"
 
 [tasks.codegen]
-description = "regenerate jp readings from Unihan, then sync rust data from lua"
+description = "regenerate jp readings from Unihan, then sync rust data from json"
 run = """
 uv run scripts/gen_jp_data.py
 nvim -l scripts/export_rs.lua

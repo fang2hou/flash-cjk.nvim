@@ -28,13 +28,13 @@ input letter.
 - `rust.lua` — bridge to the native matcher: persistent UDS server transport (Unix, zero config), per-keystroke spawn fallback, JSON protocol, circuit breaker to the vim-regex path
 - `lang/` engine package — one folder per language behind a lazy registry
   (`lang/init.lua`): each `lang/<code>/init.lua` implements the same
-  `pattern`/`strs`/`comma` surface over `lang/<code>/data.lua`
-  (`lang/ja/data.lua` is generated); en is the built-in literal fallback
+  `pattern`/`strs`/`comma` surface over `lang/<code>/data.json`
+  (`lang/ja/data.json` is generated); en is the built-in literal fallback
   domain and has no module
 - `flash-cjk-core` (Rust lib) — charset, parser, DP matcher, prediction; mirrors Lua semantics
 - `flash-cjk-search` (Rust binary) — JSON front for the core: stdin/stdout one-shot mode and a `serve` UDS server mode with connection-based liveness (a client is registered while its session connection is open; the last one out takes the server with it)
 - `tests/` — behavior suite, strict rust↔vim cross-validation and fuzz, LazyVim-style e2e
-- `scripts/` — data generators (Unihan → lua, lua → rust)
+- `scripts/` — data generators (Unihan → json, json → rust) and the typecheck config generator
 
 ## Invariants
 
@@ -44,12 +44,12 @@ What must remain true about the architecture:
   matches (`searchpos` semantics: left-to-right, first alternative in compile
   order wins, spans never overlap). Enforced by `tests/cross_validate_rust.lua`
   and the e2e parity check; any matcher change updates both paths.
-- **Data single source**: the Lua tables are the source of truth.
-  `lang/ja/data.lua` is generated from Unihan (`scripts/gen_jp_data.py`); every
+- **Data single source**: the JSON dictionaries are the source of truth.
+  `lang/ja/data.json` is generated from Unihan (`scripts/gen_jp_data.py`); every
   Rust static table — Chinese, Japanese, Korean jamo and punctuation — is
-  generated from the Lua tables by `scripts/export_rs.lua` into `rust/data/`
-  and `rust/crates/flash-cjk-core/src/data/`. Generated files are never
-  hand-edited.
+  generated from the JSON dictionaries by `scripts/export_rs.lua` into
+  `rust/data/` and `rust/crates/flash-cjk-core/src/data/`. Generated files
+  are never hand-edited.
 - **Optional native path**: the binary's absence or repeated failure must
   transparently fall back to the vim-regex path with identical behavior.
   The labeler works unchanged on either path.

@@ -5,7 +5,7 @@
 local uv = vim.uv
 
 local function setup_rtp()
-	local root = vim.fs.normalize(uv.cwd())
+	local root = vim.fs.normalize(uv.cwd() or "")
 	if root:match("tests$") then
 		root = vim.fs.dirname(root)
 	end
@@ -14,7 +14,14 @@ local function setup_rtp()
 	local flash_dep = deps .. "/flash.nvim"
 	if not uv.fs_stat(flash_dep) then
 		vim.fn.mkdir(deps, "p")
-		vim.system({ "git", "clone", "--depth", "1", "https://github.com/folke/flash.nvim", flash_dep }):wait()
+		vim.system({
+			"git",
+			"clone",
+			"--depth",
+			"1",
+			"https://github.com/folke/flash.nvim",
+			flash_dep,
+		}):wait()
 	end
 	vim.opt.rtp:prepend(flash_dep)
 	return root
@@ -52,11 +59,11 @@ local no_en = fc.make_mix_mode({ zhcn = true, ja = true, en = false })
 -- ---------------------------------------------------------------------------
 -- data sanity
 
-ok(ja.pattern("ni"):match("日", 1, true), "p2.ni contains 日")
-ok(ja.pattern("ni"):match("に", 1, true), "p2.ni contains に")
-ok(ja.pattern("ni"):match("ニ", 1, true), "p2.ni contains ニ")
-ok(ja.pattern("tsu") and ja.pattern("tsu"):match("つ", 1, true), "p3.tsu contains つ")
-ok(ja.pattern("sha") and ja.pattern("sha"):match("しゃ", 1, true), "p3.sha contains しゃ combo")
+ok(ja.pattern("ni"):match("日", 1), "p2.ni contains 日")
+ok(ja.pattern("ni"):match("に", 1), "p2.ni contains に")
+ok(ja.pattern("ni"):match("ニ", 1), "p2.ni contains ニ")
+ok(ja.pattern("tsu") and ja.pattern("tsu"):match("つ", 1), "p3.tsu contains つ")
+ok(ja.pattern("sha") and ja.pattern("sha"):match("しゃ", 1), "p3.sha contains しゃ combo")
 ok(not matches(ja_only, "ni", "们"), "jp-only: ni does not match zh-only char 们")
 
 -- ---------------------------------------------------------------------------
@@ -79,7 +86,10 @@ ok(matches(mixed, "ue", "うえ"), "ue matches うえ")
 -- Korean: romanization + two-set, both at once
 local trilingual = fc.make_mix_mode({ zhcn = true, ja = true, ko = true, en = true })
 ok(matches(trilingual, "kim", "김"), "kim matches 김 (RR)")
-ok(matches(fc.make_mix_mode({ zhcn = false, ja = false, ko = true, en = false }), "kim", "김"), "kim matches 김 (ko only)")
+ok(
+	matches(fc.make_mix_mode({ zhcn = false, ja = false, ko = true, en = false }), "kim", "김"),
+	"kim matches 김 (ko only)"
+)
 ok(matches(trilingual, "gim", "김"), "gim matches 김 (RR)")
 ok(matches(trilingual, "seoul", "서울"), "seoul matches 서울")
 ok(matches(trilingual, "han", "한"), "han matches 한")
@@ -91,7 +101,10 @@ ok(matches(trilingual, "dkswek", "앉다"), "dkswek matches 앉다 (compound fin
 ok(matches(trilingual, "gkr", "학"), "gkr matches 학 (two-set)")
 ok(matches(trilingual, "gkrry", "학교"), "gkrry matches 학교 (two-set)")
 ok(matches(trilingual, "hak", "학"), "hak matches 학 (romanization)")
-ok(not matches(fc.make_mix_mode({ zhcn = true, ja = true, ko = false, en = true }), "kim", "김"), "ko off: kim does not match 김")
+ok(
+	not matches(fc.make_mix_mode({ zhcn = true, ja = true, ko = false, en = true }), "kim", "김"),
+	"ko off: kim does not match 김"
+)
 
 -- ko labeler prediction: 안녕 must predict both spellings
 local ko_strs = ko.strs("안녕")
@@ -118,7 +131,10 @@ ok(matches(pure, "dkss", "안녕"), "pure: dkss matches 안녕")
 ok(matches(pure, "niho", "日本"), "pure: niho matches 日本")
 
 -- mid-input language forcing (C-p / C-n / C-k markers)
-ok(fc.parse_forced("ti\x01") == "ti" and select(2, fc.parse_forced("ti\x01")) == "zhcn", "parse_forced: cn marker")
+ok(
+	fc.parse_forced("ti\x01") == "ti" and select(2, fc.parse_forced("ti\x01")) == "zhcn",
+	"parse_forced: cn marker"
+)
 ok(select(2, fc.parse_forced("ti\x02")) == "ja", "parse_forced: jp marker")
 ok(select(2, fc.parse_forced("ti\x04")) == "ko", "parse_forced: ko marker")
 ok(select(2, fc.parse_forced("ti\x05")) == "en", "parse_forced: en marker")
@@ -146,11 +162,20 @@ ok(matches(ja_only, "hi", "人"), "jp-only: hi matches 人 (hito)")
 ok(not matches(zh_only, "ni", "に"), "zh-only: ni does not match kana に")
 ok(matches(zh_only, "ni", "你"), "zh-only: ni matches 你")
 -- per-jump force_keys: mode must honor the jump-specific keys
-local per_jump = fc.make_mix_mode({ zhcn = true, ja = true, ko = true, en = true }, { zhcn = "<C-d>" })
+local per_jump = fc.make_mix_mode(
+	{ zhcn = true, ja = true, ko = true, en = true },
+	{ zhcn = "<C-d>" }
+)
 ok(not matches(per_jump, "ti\x01", "ち"), "per-jump keys: cn marker still locks cn")
-ok(matches(per_jump, "ti\x02", "ち") == false and true or true, "per-jump keys: jp disabled (only cn bound)")
+ok(
+	matches(per_jump, "ti\x02", "ち") == false and true or true,
+	"per-jump keys: jp disabled (only cn bound)"
+)
 -- empty marker set must not crash
-ok(fc.parse_forced("ti", { zhcn = false, ja = false, ko = false }) == "ti", "all keys disabled: no crash, no strip")
+ok(
+	fc.parse_forced("ti", { zhcn = false, ja = false, ko = false }) == "ti",
+	"all keys disabled: no crash, no strip"
+)
 ok(not matches(zh_only, "kyo", "京"), "zh-only: kyo does not match 京")
 ok(matches(mixed, "kyo", "京"), "mixed: kyo matches 京")
 
@@ -273,10 +298,22 @@ ok(hit_ti_cn, "forced lock pattern still finds pinyin matches")
 ok(not hit_kana, "forced lock pattern drops Japanese matches")
 
 -- force_keys are configurable: remap cn to <C-d>, then verify and restore
-fc.setup({ languages = { zhcn = { force_key = false }, ja = { force_key = false }, ko = { force_key = false } } })
+fc.setup({
+	languages = {
+		zhcn = { force_key = false },
+		ja = { force_key = false },
+		ko = { force_key = false },
+	},
+})
 ok(fc.parse_forced("ti\x01") == "ti\x01", "all locks disabled: markers not stripped")
 ok(select(2, fc.parse_forced("ti\x01")) == nil, "all locks disabled: no forced lang")
-fc.setup({ languages = { zhcn = { force_key = "<C-c>" }, ja = { force_key = "<C-j>" }, ko = { force_key = "<C-k>" } } }) -- restore defaults
+fc.setup({
+	languages = {
+		zhcn = { force_key = "<C-c>" },
+		ja = { force_key = "<C-j>" },
+		ko = { force_key = "<C-k>" },
+	},
+}) -- restore defaults
 do
 	local State = require("flash.state")
 	vim.api.nvim_buf_set_lines(0, 0, -1, false, { "日本語テスト ちちはち 梯子" })
@@ -303,7 +340,10 @@ do
 	vim.api.nvim_input("ti<C-j><esc>")
 	state_e2e:loop()
 	ok(fired, "end-to-end: C-j action fires inside flash loop")
-	ok(state_e2e.pattern.pattern == "ti\x02", "end-to-end: C-j newline converted to buffer-safe marker")
+	ok(
+		state_e2e.pattern.pattern == "ti\x02",
+		"end-to-end: C-j newline converted to buffer-safe marker"
+	)
 	ok(#state_e2e.results == 3, "end-to-end: locked-jp finds the three ち")
 end
 
@@ -317,7 +357,10 @@ do
 	Prompt.set("ti\x01", false)
 	ok(Prompt.prompt == "⚡ti [中]", "prompt displays [中] for cn lock")
 	Prompt.set("dk\x04\x02", false)
-	ok(Prompt.prompt == "⚡dk [韩] [日]", "prompt displays multiple locks (rightmost shown last)")
+	ok(
+		Prompt.prompt == "⚡dk [韩] [日]",
+		"prompt displays multiple locks (rightmost shown last)"
+	)
 	Prompt.set("ti\x05", false)
 	ok(Prompt.prompt == "⚡ti [英]", "prompt displays [英] for en lock")
 end
@@ -365,7 +408,10 @@ do
 			matcher = rust.matcher(langs_r),
 			labeler = function() end,
 		})
-		ok(span_set(state_f) == span_set(state_v), "circuit breaker falls back to identical regex spans")
+		ok(
+			span_set(state_f) == span_set(state_v),
+			"circuit breaker falls back to identical regex spans"
+		)
 		rust.enable_for_test()
 
 		-- multi-window parity: two splits of one buffer must produce the
@@ -381,15 +427,30 @@ do
 			local function win_span_set(st)
 				local t = {}
 				for _, mm in ipairs(st.results) do
-					t[#t + 1] = mm.win .. ":" .. mm.pos[1] .. ":" .. mm.pos[2] .. ":" .. mm.end_pos[2]
+					t[#t + 1] = mm.win
+						.. ":"
+						.. mm.pos[1]
+						.. ":"
+						.. mm.pos[2]
+						.. ":"
+						.. mm.end_pos[2]
 				end
 				table.sort(t)
 				return table.concat(t, ",")
 			end
-			local base = { pattern = "ti", labels = "asdfghjkl", search = { mode = fc.make_mix_mode(langs_r, default_keys) }, labeler = function() end }
+			local base = {
+				pattern = "ti",
+				labels = "asdfghjkl",
+				search = { mode = fc.make_mix_mode(langs_r, default_keys) },
+				labeler = function() end,
+			}
 			local st_default = State.new(vim.tbl_deep_extend("force", base, { matcher = nil }))
-			local st_rust = State.new(vim.tbl_deep_extend("force", base, { matcher = rust.matcher(langs_r) }))
-			ok(win_span_set(st_rust) == win_span_set(st_default), "multi-window results match the default searcher")
+			local st_rust =
+				State.new(vim.tbl_deep_extend("force", base, { matcher = rust.matcher(langs_r) }))
+			ok(
+				win_span_set(st_rust) == win_span_set(st_default),
+				"multi-window results match the default searcher"
+			)
 			vim.cmd("close")
 		end
 
@@ -397,7 +458,13 @@ do
 		-- itself, so the rust path must match the default searcher under
 		-- restricted ranges too (cursor mid-line, matches on both sides)
 		do
-			vim.api.nvim_buf_set_lines(0, 0, -1, false, { "日本語テスト ちちはち 梯子 tail" })
+			vim.api.nvim_buf_set_lines(
+				0,
+				0,
+				-1,
+				false,
+				{ "日本語テスト ちちはち 梯子 tail" }
+			)
 			vim.api.nvim_win_set_cursor(0, { 1, 30 })
 			local function cols(st)
 				local t = {}
@@ -414,8 +481,17 @@ do
 					labeler = function() end,
 				}
 				local dv = State.new(vim.tbl_deep_extend("force", base_w, { matcher = nil }))
-				local dr = State.new(vim.tbl_deep_extend("force", base_w, { matcher = rust.matcher(langs_r) }))
-				ok(cols(dr) == cols(dv), string.format("wrap=%s: rust spans match default searcher (%s)", tostring(wrap), cols(dr)))
+				local dr = State.new(
+					vim.tbl_deep_extend("force", base_w, { matcher = rust.matcher(langs_r) })
+				)
+				ok(
+					cols(dr) == cols(dv),
+					string.format(
+						"wrap=%s: rust spans match default searcher (%s)",
+						tostring(wrap),
+						cols(dr)
+					)
+				)
 			end
 			vim.api.nvim_win_set_cursor(0, { 1, 0 })
 		end
@@ -427,7 +503,8 @@ do
 		do
 			local slines = {}
 			for i = 1, 120 do
-				slines[i] = (i % 7 == 0) and ("row " .. i .. " 日本語テスト ち 梯") or ("filler " .. i)
+				slines[i] = (i % 7 == 0) and ("row " .. i .. " 日本語テスト ち 梯")
+					or ("filler " .. i)
 			end
 			vim.api.nvim_buf_set_lines(0, 0, -1, false, slines)
 			vim.api.nvim_win_set_cursor(0, { 60, 0 })
@@ -441,7 +518,8 @@ do
 				labeler = function() end,
 			}
 			local st_d = State.new(vim.tbl_deep_extend("force", base_s, { matcher = nil }))
-			local st_r = State.new(vim.tbl_deep_extend("force", base_s, { matcher = rust.matcher(langs_r) }))
+			local st_r =
+				State.new(vim.tbl_deep_extend("force", base_s, { matcher = rust.matcher(langs_r) }))
 			local function lines_set(st)
 				local t = {}
 				for _, mm in ipairs(st.results) do
@@ -451,7 +529,10 @@ do
 				return table.concat(t, ",")
 			end
 			ok(#st_r.results > 0, "scrolled window: rust matcher returns visible matches")
-			ok(lines_set(st_r) == lines_set(st_d), "scrolled window: rust spans (absolute lines) match default searcher")
+			ok(
+				lines_set(st_r) == lines_set(st_d),
+				"scrolled window: rust spans (absolute lines) match default searcher"
+			)
 			vim.api.nvim_win_set_cursor(0, { 1, 0 })
 			vim.cmd("normal! gg")
 		end
@@ -485,7 +566,10 @@ do
 					same = false
 				end
 			end
-			ok(same, "server transport: responses identical to spawn transport (spans + pred_langs)")
+			ok(
+				same,
+				"server transport: responses identical to spawn transport (spans + pred_langs)"
+			)
 
 			-- a per-request budget that cannot be met must fall back to
 			-- the spawn transport silently for that keystroke
@@ -503,7 +587,9 @@ do
 			-- crash recovery: kill -9 the server; the next keystroke must
 			-- fall back and a replacement server must come up
 			local addr = rust.server_addr()
-			local srv = vim.fn.trim(vim.fn.system(("pgrep -f 'flash-cjk-search serve --socket %s'"):format(addr)) or "")
+			local srv = vim.fn.trim(
+				vim.fn.system(("pgrep -f 'flash-cjk-search serve --socket %s'"):format(addr)) or ""
+			)
 			if srv ~= "" then
 				vim.fn.system(("kill -9 %s"):format(srv))
 			end
@@ -568,18 +654,33 @@ do
 		fc.config.languages.ja.force_key == "<C-d>" and fc.config.languages.ja.scheme == "roma",
 		"setup: field-level deep merge keeps unspecified fields"
 	)
-	ok(fc.config.languages.ko.force_key == "<C-k>", "setup: deep merge leaves other languages alone")
+	ok(
+		fc.config.languages.ko.force_key == "<C-k>",
+		"setup: deep merge leaves other languages alone"
+	)
 	fc.setup({ languages = { ko = { scheme = "roma" } } })
 	ok(fc.config.languages.ko.scheme == "roma", "setup: scheme field stored")
-	ok(pcall(fc.setup, { languages = { zhcn = { scheme = "qwerty" } } }) == false, "setup: unknown scheme errors")
-	ok(pcall(fc.setup, { languages = { en = { scheme = "roma" } } }) == false, "setup: en has no scheme concept")
+	ok(
+		pcall(fc.setup, { languages = { zhcn = { scheme = "qwerty" } } }) == false,
+		"setup: unknown scheme errors"
+	)
+	ok(
+		pcall(fc.setup, { languages = { en = { scheme = "roma" } } }) == false,
+		"setup: en has no scheme concept"
+	)
 	ok(pcall(fc.setup, { languages = { zhcn = 42 } }) == false, "setup: wrong entry type errors")
-	ok(pcall(fc.setup, { languages = { xx = true } }) == false, "setup: unknown language code errors")
+	ok(
+		pcall(fc.setup, { languages = { xx = true } }) == false,
+		"setup: unknown language code errors"
+	)
 	fc.config = vim.deepcopy(saved) -- defaults back for the resolve_langs checks
 	local l = fc.resolve_langs(nil)
 	ok(l.zhcn and l.ja and l.ko and l.en, "resolve_langs(nil): setup-enabled set (all defaults on)")
 	l = fc.resolve_langs({ "zhcn", "en" })
-	ok(l.zhcn and l.en and not l.ja and not l.ko, "resolve_langs: array fully decides the enabled set")
+	ok(
+		l.zhcn and l.en and not l.ja and not l.ko,
+		"resolve_langs: array fully decides the enabled set"
+	)
 	ok(pcall(fc.resolve_langs, { "kr" }) == false, "resolve_langs: kr alias removed")
 	ok(pcall(fc.resolve_langs, { "xx" }) == false, "resolve_langs: unknown code errors")
 	fc.setup({ languages = { ko = false } })
@@ -637,9 +738,15 @@ do
 	local st = priority_state({ "ja" }, "ti", TI_BUF)
 	ok(pool_pos(st, TI_TI) < pool_pos(st, TI_CN), "priority ja: first label goes to the ja match")
 	st = priority_state({ "zhcn" }, "ti", TI_BUF)
-	ok(pool_pos(st, TI_CN) < pool_pos(st, TI_TI), "priority zhcn: first label goes to the zhcn match")
+	ok(
+		pool_pos(st, TI_CN) < pool_pos(st, TI_TI),
+		"priority zhcn: first label goes to the zhcn match"
+	)
 	st = priority_state(nil, "ti", TI_BUF)
-	ok(pool_pos(st, TI_CN) < pool_pos(st, TI_TI), "no priority: position order (leftmost labeled first)")
+	ok(
+		pool_pos(st, TI_CN) < pool_pos(st, TI_TI),
+		"no priority: position order (leftmost labeled first)"
+	)
 
 	-- multi-interpretation attribution: 梯 extends "t" through BOTH
 	-- xiaohe (ti) and Japanese readings (tai/tei), so a ja priority
@@ -647,11 +754,20 @@ do
 	-- leftmost ち (the reverse buffer makes the flip observable)
 	local T_BUF, T_TI, T_CN = { "x ち 梯" }, 2, 6
 	st = priority_state({ "zhcn" }, "t", T_BUF)
-	ok(pool_pos(st, T_CN) < pool_pos(st, T_TI), "multi-interpretation: zhcn priority promotes 梯 (zhcn+ja) over ち")
+	ok(
+		pool_pos(st, T_CN) < pool_pos(st, T_TI),
+		"multi-interpretation: zhcn priority promotes 梯 (zhcn+ja) over ち"
+	)
 	st = priority_state({ "ja" }, "t", T_BUF)
-	ok(pool_pos(st, T_TI) < pool_pos(st, T_CN), "multi-interpretation: ja priority keeps position order (梯 counts as ja too)")
+	ok(
+		pool_pos(st, T_TI) < pool_pos(st, T_CN),
+		"multi-interpretation: ja priority keeps position order (梯 counts as ja too)"
+	)
 	st = priority_state(nil, "t", T_BUF)
-	ok(pool_pos(st, T_TI) < pool_pos(st, T_CN), "multi-interpretation: no priority keeps position order")
+	ok(
+		pool_pos(st, T_TI) < pool_pos(st, T_CN),
+		"multi-interpretation: no priority keeps position order"
+	)
 
 	-- attribution of one text: engines whose spellings extend the
 	-- prefix; literal ASCII spans belong to en
@@ -672,9 +788,15 @@ do
 	-- config validation: storage, dedupe, errors
 	local saved = vim.deepcopy(fc.config)
 	fc.setup({ priority = { "ja", "zhcn" } })
-	ok(vim.inspect(fc.config.priority) == vim.inspect({ "ja", "zhcn" }), "setup: priority stored in order")
+	ok(
+		vim.inspect(fc.config.priority) == vim.inspect({ "ja", "zhcn" }),
+		"setup: priority stored in order"
+	)
 	fc.setup({ priority = { "ja", "ja", "ko" } })
-	ok(vim.inspect(fc.config.priority) == vim.inspect({ "ja", "ko" }), "setup: priority duplicates dropped")
+	ok(
+		vim.inspect(fc.config.priority) == vim.inspect({ "ja", "ko" }),
+		"setup: priority duplicates dropped"
+	)
 	ok(pcall(fc.setup, { priority = { "xx" } }) == false, "setup: unknown priority code errors")
 	ok(pcall(fc.setup, { priority = "ja" }) == false, "setup: non-array priority errors")
 	fc.config = saved

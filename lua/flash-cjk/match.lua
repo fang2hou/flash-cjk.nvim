@@ -7,49 +7,19 @@ local lang = require("flash-cjk.lang")
 
 local M = {}
 
--- Engines resolve lazily through the lang registry: requiring this
--- module touches no language data table -- the first parse pulls in
--- exactly the enabled engines.
-local zhcn, ja, ko ---@type table?
-local function get_zhcn()
-	if zhcn == nil then
-		zhcn = lang.get("zhcn")
-	end
-	return zhcn
-end
-
-local function get_ja()
-	if ja == nil then
-		ja = lang.get("ja")
-	end
-	return ja
-end
-
-local function get_ko()
-	if ko == nil then
-		ko = lang.get("ko")
-	end
-	return ko
-end
-
--- Regex escapes for "other" nodes (characters no engine claims):
--- matcher-generic, deliberately not language data, so a ja/ko/en-only
--- parse never loads the zhcn engine for it.
+-- Engines resolve lazily through the lang registry: the first parse
+-- pulls in exactly the enabled engines' data tables.
 local ESCAPE = { ["\\"] = [[\\]] }
 
--- Upper bound on the number of pattern interpretations kept per keystroke.
--- Romaji segments are 1-3 letters long, so the number of possible
--- segmentations grows quickly; longer inputs degrade gracefully instead.
+-- Upper bound on interpretations kept per keystroke; romaji segments
+-- are 1-3 letters, so segmentation count grows quickly and longer
+-- inputs degrade gracefully instead.
 local MAX_SEGMENTATIONS = 600
 
--- ------------------------------------------------------------------
--- punctuation
-
 local comma_cache = {} ---@type table<string, table<string,string>>
--- The cache key encodes the zhcn/ja flags, the tables' only inputs, so
--- entries self-invalidate when setup() changes the enabled languages.
+-- The cache key encodes the zhcn/ja flags -- the tables' only inputs
+-- -- so entries self-invalidate when setup() changes the languages.
 
--- Effective punctuation map: each enabled language contributes its own
 local function merge_class(a, b)
 	if not a then
 		return b
@@ -60,40 +30,44 @@ local function merge_class(a, b)
 	return "[" .. string.sub(a, 2, -2) .. string.sub(b, 2, -2) .. "]"
 end
 
+-- Effective punctuation map: each enabled language contributes its own.
 local function comma_map(langs)
-	local key = (langs.zhcn and "z" or "-") .. (langs.ja and "j" or "-")
-	local map = comma_cache[key]
+	local cache_key = (langs.zhcn and "z" or "-") .. (langs.ja and "j" or "-")
+	local map = comma_cache[cache_key]
 	if not map then
 		map = {}
-		local cn_tbl = langs.zhcn and get_zhcn().comma or {}
-		local ja_tbl = langs.ja and get_ja().comma or {}
+		local cn_tbl = langs.zhcn and lang.get("zhcn").comma or {}
+		local ja_tbl = langs.ja and lang.get("ja").comma or {}
 		for _, src in ipairs({ cn_tbl, ja_tbl }) do
-			for k, v in pairs(src) do
-				map[k] = merge_class(map[k], v)
+			for key, class in pairs(src) do
+				map[key] = merge_class(map[key], class)
 			end
 		end
-		comma_cache[key] = map
+		comma_cache[cache_key] = map
 	end
 	return map
 end
 
--- ------------------------------------------------------------------
--- pattern building
-
--- Shallow copy including the `_alpha` bookkeeping field.
-local function copy(tbl)
-	local c = {}
+local function clone(tbl)
+	local copy = {}
 	for k, v in pairs(tbl) do
-		c[k] = v
+		copy[k] = v
 	end
-	return c
+	return copy
 end
 
-local function merge_table(tab1, tab2)
-	for i = 1, #tab2 do
-		table.insert(tab1, tab2[i])
+local function append_all(dst, src)
+	for i = 1, #src do
+		table.insert(dst, src[i])
 	end
-	return tab1
+	return dst
+end
+
+-- Copy a partial segmentation with one more segment appended.
+local function extend(prefix, str, seg_type)
+	local seg = clone(prefix)
+	seg[#seg + 1] = { str = str, type = seg_type }
+	return seg
 end
 
 local function make_nodes(comma)
@@ -102,19 +76,19 @@ local function make_nodes(comma)
 			return "[" .. str .. string.upper(str) .. "]"
 		end,
 		pinyin = function(str)
-			return get_zhcn().pattern(str)
+			return lang.get("zhcn").pattern(str)
 		end,
 		comma = function(str)
 			return comma[str]
 		end,
 		singlepin = function(str)
-			return get_zhcn().pattern(str)
+			return lang.get("zhcn").pattern(str)
 		end,
 		jp = function(str)
-			return get_ja().pattern(str)
+			return lang.get("ja").pattern(str)
 		end,
 		ko = function(str)
-			return get_ko().pattern(str)
+			return lang.get("ko").pattern(str)
 		end,
 		other = function(str)
 			return ESCAPE[str] or str
@@ -124,17 +98,18 @@ end
 
 local function regex(segments, comma)
 	local nodes = make_nodes(comma)
-	local regexs = {}
-	for _, v in ipairs(segments) do
-		regexs[#regexs + 1] = nodes[v.type](v.str)
+	local fragments = {}
+	for _, seg in ipairs(segments) do
+		fragments[#fragments + 1] = nodes[seg.type](seg.str)
 	end
-	return table.concat(regexs)
+	return table.concat(fragments)
 end
 
 -- Splits the input into every plausible sequence of segments.
--- A segment is one of: a literal letter (alpha), a 2-key xiaohe double-pinyin code
--- (pinyin), a single pinyin first letter (singlepin), a 1-3 letter
--- romaji prefix (jp), a punctuation key (comma) or any other character.
+-- A segment is one of: a literal letter (alpha), a 2-key xiaohe
+-- double-pinyin code (pinyin), a single pinyin first letter
+-- (singlepin), a 1-3 letter romaji prefix (jp), a 1-4 letter Korean
+-- prefix (ko), a punctuation key (comma) or any other character.
 ---@param str string
 ---@param prefix table? partial segmentation
 ---@param ctx {count: integer, langs: table<string,boolean>, comma: table<string,string>}
@@ -151,120 +126,111 @@ local function parser(str, prefix, ctx)
 	local firstchar = string.sub(str, 1, 1)
 	local secondchar = string.sub(str, 2, 2)
 	local thirdchar = string.sub(str, 3, 3)
-	local chars = {}
-	for k, _ in pairs(ctx.comma) do
-		table.insert(chars, k)
+	local comma_keys = {}
+	for key in pairs(ctx.comma) do
+		table.insert(comma_keys, key)
 	end
+	-- Literal letters may follow a language segment only under
+	-- mixed_input; prefix._alpha tracks whether the chain is still
+	-- purely literal (nil = no language segment yet).
+	local literal_ok = ctx.langs.en and (ctx.langs.mixed_input ~= false or prefix._alpha ~= false)
 	if firstchar == "" then
 		ctx.count = ctx.count + 1
 		return { prefix }
 	elseif string.match(firstchar, "%l") then
 		local results = {}
 		if secondchar == "" then
-			if ctx.langs.en and (ctx.langs.mixed_input ~= false or prefix._alpha ~= false) then
-				local p1 = copy(prefix)
-				p1[#p1 + 1] = { str = firstchar, type = "alpha" }
-				results = merge_table(results, parser("", p1, ctx))
+			if literal_ok then
+				results = append_all(results, parser("", extend(prefix, firstchar, "alpha"), ctx))
 			end
 			if ctx.langs.zhcn then
-				local p2 = copy(prefix)
-				p2[#p2 + 1] = { str = firstchar, type = "singlepin" }
-				results = merge_table(results, parser("", p2, ctx))
+				results =
+					append_all(results, parser("", extend(prefix, firstchar, "singlepin"), ctx))
 			end
-			if ctx.langs.ja and get_ja().pattern(firstchar) then
-				local p3 = copy(prefix)
-				p3[#p3 + 1] = { str = firstchar, type = "jp" }
-				results = merge_table(results, parser("", p3, ctx))
+			if ctx.langs.ja and lang.get("ja").pattern(firstchar) then
+				results = append_all(results, parser("", extend(prefix, firstchar, "jp"), ctx))
 			end
-			if ctx.langs.ko and get_ko().pattern(firstchar) then
-				local p4 = copy(prefix)
-				p4[#p4 + 1] = { str = firstchar, type = "ko" }
-				results = merge_table(results, parser("", p4, ctx))
+			if ctx.langs.ko and lang.get("ko").pattern(firstchar) then
+				results = append_all(results, parser("", extend(prefix, firstchar, "ko"), ctx))
 			end
 			return results
 		elseif string.match(secondchar, "%a") then
-			-- longest / most specific segments first: when the segmentation
-			-- budget runs out on long inputs, the informative branches
-			-- (pinyin, romaji) survive instead of the literal alpha ones
-			--
-			-- Literal letters and language segments do not mix within one
-			-- interpretation (prefix._alpha): mixed chains multiply the
-			-- alternatives and each giant CJK character class makes vim's
-			-- regex execution measurably slower.
-			if ctx.langs.zhcn and get_zhcn().pattern(firstchar .. secondchar) then
-				local p = copy(prefix)
-				p._alpha = false
-				p[#p + 1] = { str = firstchar .. secondchar, type = "pinyin" }
-				results = merge_table(results, parser(string.sub(str, 3), p, ctx))
+			-- longest / most specific segments first: when the
+			-- segmentation budget runs out on long inputs, the
+			-- informative branches (pinyin, romaji) survive instead of
+			-- the literal alpha ones.
+			if ctx.langs.zhcn and lang.get("zhcn").pattern(firstchar .. secondchar) then
+				local seg = extend(prefix, firstchar .. secondchar, "pinyin")
+				seg._alpha = false
+				results = append_all(results, parser(string.sub(str, 3), seg, ctx))
 			end
 			if ctx.langs.ja then
-				local J = get_ja()
+				local ja_engine = lang.get("ja")
 				local two = firstchar .. secondchar
 				local three = two .. thirdchar
-				if string.match(thirdchar, "%a") and J.pattern(three) then
-					local pj = copy(prefix)
-					pj._alpha = false
-					pj[#pj + 1] = { str = three, type = "jp" }
-					results = merge_table(results, parser(string.sub(str, 4), pj, ctx))
+				if string.match(thirdchar, "%a") and ja_engine.pattern(three) then
+					local seg = extend(prefix, three, "jp")
+					seg._alpha = false
+					results = append_all(results, parser(string.sub(str, 4), seg, ctx))
 				end
-				if J.pattern(two) then
-					local pj = copy(prefix)
-					pj._alpha = false
-					pj[#pj + 1] = { str = two, type = "jp" }
-					results = merge_table(results, parser(string.sub(str, 3), pj, ctx))
+				if ja_engine.pattern(two) then
+					local seg = extend(prefix, two, "jp")
+					seg._alpha = false
+					results = append_all(results, parser(string.sub(str, 3), seg, ctx))
 				end
-				-- Mid-pattern single-letter romaji is only kept for keys that
-				-- are complete syllables on their own (vowels + n: あおい, にほんご);
-				-- consonant prefixes (ka, tsu...) are always typed to completion,
-				-- so they only matter as the last, unfinished segment.
-				if vim.list_contains({ "a", "e", "i", "o", "u", "n" }, firstchar) and J.pattern(firstchar) then
-					local pj = copy(prefix)
-					pj._alpha = false
-					pj[#pj + 1] = { str = firstchar, type = "jp" }
-					results = merge_table(results, parser(string.sub(str, 2), pj, ctx))
+				-- Mid-pattern single-letter romaji is only kept for keys
+				-- that are complete syllables on their own (vowels + n);
+				-- consonant prefixes are always typed to completion, so
+				-- they only matter as the last, unfinished segment.
+				if
+					vim.list_contains({ "a", "e", "i", "o", "u", "n" }, firstchar)
+					and ja_engine.pattern(firstchar)
+				then
+					local seg = extend(prefix, firstchar, "jp")
+					seg._alpha = false
+					results = append_all(results, parser(string.sub(str, 2), seg, ctx))
 				end
 			end
 			if ctx.langs.ko then
-				local K = get_ko()
-				-- Korean segments: 2-4 letters (romanization or two-set keys)
-				-- anywhere; a lone vowel letter is a complete syllable (아=a)
-				-- and valid mid-pattern, same rule as Japanese vowels.
-				for len = 4, 2, -1 do
-					local seg = string.sub(str, 1, len)
-					if #seg == len and K.pattern(seg) then
-						local pk = copy(prefix)
-						pk._alpha = false
-						pk[#pk + 1] = { str = seg, type = "ko" }
-						results = merge_table(results, parser(string.sub(str, len + 1), pk, ctx))
+				local ko_engine = lang.get("ko")
+				-- 2-4 letter segments (romanization or two-set keys)
+				-- anywhere; a lone vowel letter is a complete syllable
+				-- (아=a) and valid mid-pattern, same rule as Japanese
+				-- vowels.
+				for seg_len = 4, 2, -1 do
+					local seg_str = string.sub(str, 1, seg_len)
+					if #seg_str == seg_len and ko_engine.pattern(seg_str) then
+						local seg = extend(prefix, seg_str, "ko")
+						seg._alpha = false
+						results =
+							append_all(results, parser(string.sub(str, seg_len + 1), seg, ctx))
 					end
 				end
-				if K.vowel_letter(firstchar) and K.pattern(firstchar) then
-					local pk = copy(prefix)
-					pk._alpha = false
-					pk[#pk + 1] = { str = firstchar, type = "ko" }
-					results = merge_table(results, parser(string.sub(str, 2), pk, ctx))
+				if ko_engine.vowel_letter(firstchar) and ko_engine.pattern(firstchar) then
+					local seg = extend(prefix, firstchar, "ko")
+					seg._alpha = false
+					results = append_all(results, parser(string.sub(str, 2), seg, ctx))
 				end
 			end
-			if ctx.langs.en and (ctx.langs.mixed_input ~= false or prefix._alpha ~= false) then
-				local p = copy(prefix)
-				p[#p + 1] = { str = firstchar, type = "alpha" }
-				results = merge_table(results, parser(string.sub(str, 2), p, ctx))
+			if literal_ok then
+				results = append_all(
+					results,
+					parser(string.sub(str, 2), extend(prefix, firstchar, "alpha"), ctx)
+				)
 			end
 			return results
-		elseif ctx.langs.en and (ctx.langs.mixed_input ~= false or prefix._alpha ~= false)
-			and vim.list_contains(chars, secondchar)
-		then
+		elseif literal_ok and vim.list_contains(comma_keys, secondchar) then
 			prefix[#prefix + 1] = { str = firstchar, type = "alpha" }
 			prefix[#prefix + 1] = { str = secondchar, type = "comma" }
 			return parser(string.sub(str, 3), prefix, ctx)
-		elseif ctx.langs.en and (ctx.langs.mixed_input ~= false or prefix._alpha ~= false) then
+		elseif literal_ok then
 			prefix[#prefix + 1] = { str = firstchar, type = "alpha" }
 			prefix[#prefix + 1] = { str = secondchar, type = "other" }
 			return parser(string.sub(str, 3), prefix, ctx)
 		else
 			return {}
 		end
-	elseif vim.list_contains(chars, firstchar) then
+	elseif vim.list_contains(comma_keys, firstchar) then
 		prefix[#prefix + 1] = { str = firstchar, type = "comma" }
 		return parser(string.sub(str, 2), prefix, ctx)
 	else
@@ -273,22 +239,12 @@ local function parser(str, prefix, ctx)
 	end
 end
 
--- ------------------------------------------------------------------
--- mid-input language forcing
--- A configurable key (default C-c / C-j / C-k / C-e) pressed inside the
--- flash prompt locks matching to one language. An internal marker
--- byte is kept in the pattern string itself: extending keeps the
--- lock, backspacing over it releases, and the last marker wins.
---
--- The pressed key and the marker byte are decoupled (see MARKER_BYTES):
--- C-j's newline never enters the pattern (flash's prompt buffer rejects
--- it), and C-c's getchar interrupt is intercepted by get_char_patch()
--- and dispatched to the lock action while a flash-cjk jump is active.
-
--- Internal marker bytes stored in the pattern. They are decoupled from
--- the pressed keys: C-j itself (\n) can never enter the pattern because
--- flash writes the pattern into its prompt buffer, which rejects
--- newlines. All marker bytes are buffer-safe control characters.
+-- A configurable key (default C-c / C-j / C-k / C-e) pressed inside
+-- the flash prompt locks matching to one language. An internal marker
+-- byte is stored in the pattern string itself: extending keeps the
+-- lock, backspacing over it releases it, and the last marker wins.
+-- The key and the marker byte are decoupled because C-j's newline can
+-- never enter the pattern (flash's prompt buffer rejects newlines).
 M.MARKER_BYTES = { zhcn = "\x01", ja = "\x02", ko = "\x04", en = "\x05" }
 
 ---Returns the marker table for the enabled force_keys.
@@ -297,10 +253,10 @@ M.MARKER_BYTES = { zhcn = "\x01", ja = "\x02", ko = "\x04", en = "\x05" }
 local function markers_from_config(force_keys)
 	local markers = { map = {}, strip = nil }
 	local bytes = {}
-	for lang, key in pairs(force_keys) do
-		if type(key) == "string" and key ~= "" and M.MARKER_BYTES[lang] then
-			markers.map[M.MARKER_BYTES[lang]] = lang
-			bytes[#bytes + 1] = M.MARKER_BYTES[lang]
+	for code, key in pairs(force_keys) do
+		if type(key) == "string" and key ~= "" and M.MARKER_BYTES[code] then
+			markers.map[M.MARKER_BYTES[code]] = code
+			bytes[#bytes + 1] = M.MARKER_BYTES[code]
 		end
 	end
 	if #bytes > 0 then
@@ -322,11 +278,11 @@ function M.parse_forced(pattern, force_keys)
 	end
 	local clean = string.gsub(pattern, markers.strip, "")
 	local best_pos, best_lang = 0, nil
-	for marker, lang in pairs(markers.map) do
+	for marker, code in pairs(markers.map) do
 		local pos = string.find(pattern, marker, 1, true)
 		while pos do
 			if pos > best_pos then
-				best_pos, best_lang = pos, lang
+				best_pos, best_lang = pos, code
 			end
 			pos = string.find(pattern, marker, pos + 1, true)
 		end
@@ -364,23 +320,23 @@ function M.make_mix_mode(langs, force_keys)
 		end
 		local all = parser(clean, nil, { count = 0, langs = eff_langs, comma = eff_comma })
 		if #all == 0 then
-			-- no interpretation at all (e.g. en disabled and the
-			-- input has no pinyin/romaji reading): match the literal input
+			-- no interpretation at all (e.g. en disabled and no reading
+			-- matches): match the literal input
 			local ret = "\\V" .. vim.fn.escape(clean, "\\")
 			return ret, ret
 		end
-		local regexs = { [[\(]] }
+		local alternatives = { [[\(]] }
 		local seen = {}
-		for _, v in ipairs(all) do
-			local r = regex(v, eff_comma)
+		for _, seg in ipairs(all) do
+			local r = regex(seg, eff_comma)
 			if not seen[r] then
 				seen[r] = true
-				regexs[#regexs + 1] = r
-				regexs[#regexs + 1] = [[\|]]
+				alternatives[#alternatives + 1] = r
+				alternatives[#alternatives + 1] = [[\|]]
 			end
 		end
-		regexs[#regexs] = [[\)]]
-		local ret = table.concat(regexs)
+		alternatives[#alternatives] = [[\)]]
+		local ret = table.concat(alternatives)
 		return ret, ret
 	end
 end
