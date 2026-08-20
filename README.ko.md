@@ -19,6 +19,8 @@
 - 🇯🇵 **일본어**: 로마자
 - 🇰🇷 **한국어**: 두벌식(Dubeolsik) 또는 로마자
 
+https://github.com/user-attachments/assets/37599dab-b0c6-4d90-8463-cb4706841ac3
+
 ## 🚀 설치
 
 Neovim ≥ 0.10과 [flash.nvim](https://github.com/folke/flash.nvim)이 필요합니다. Rust toolchain은 선택 사항이며 네이티브 매처를 빌드할 때만 필요합니다. [lazy.nvim](https://github.com/folke/lazy.nvim)으로 설치합니다:

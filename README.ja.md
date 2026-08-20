@@ -19,6 +19,8 @@
 - 🇯🇵 **日本語**：ローマ字
 - 🇰🇷 **韓国語**：두벌식（Dubeolsik）またはローマ字
 
+https://github.com/user-attachments/assets/37599dab-b0c6-4d90-8463-cb4706841ac3
+
 ## 🚀 インストール
 
 Neovim ≥ 0.10 と [flash.nvim](https://github.com/folke/flash.nvim) が必要です。Rust ツールチェーンはオプションで、ネイティブマッチャーをビルドする場合のみ必要です。[lazy.nvim](https://github.com/folke/lazy.nvim) でのインストール例：
