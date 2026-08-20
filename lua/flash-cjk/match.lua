@@ -247,13 +247,13 @@ end
 -- never enter the pattern (flash's prompt buffer rejects newlines).
 M.MARKER_BYTES = { zhcn = "\x01", ja = "\x02", ko = "\x04", en = "\x05" }
 
----Returns the marker table for the enabled force_keys.
----@param force_keys table lang -> key string (or false to disable)
+---Returns the marker table for the enabled filter_keys.
+---@param filter_keys table lang -> key string (or false to disable)
 ---@return table markers { map = byte->lang, strip = pattern? }
-local function markers_from_config(force_keys)
+local function markers_from_config(filter_keys)
 	local markers = { map = {}, strip = nil }
 	local bytes = {}
-	for code, key in pairs(force_keys) do
+	for code, key in pairs(filter_keys) do
 		if type(key) == "string" and key ~= "" and M.MARKER_BYTES[code] then
 			markers.map[M.MARKER_BYTES[code]] = code
 			bytes[#bytes + 1] = M.MARKER_BYTES[code]
@@ -265,14 +265,14 @@ local function markers_from_config(force_keys)
 	return markers
 end
 
----Splits a raw pattern into (clean_pattern, forced_lang?).
+---Splits a raw pattern into (clean_pattern, locked_lang?).
 ---The rightmost marker in the pattern wins.
 ---@param pattern string
----@param force_keys table? overrides the configured force_keys
+---@param filter_keys table? overrides the configured filter_keys
 ---@return string clean
----@return string? forced "zhcn" | "ja" | "ko" | "en"
-function M.parse_forced(pattern, force_keys)
-	local markers = markers_from_config(force_keys or config.force_keys(config.config.languages))
+---@return string? locked "zhcn" | "ja" | "ko" | "en"
+function M.parse_filter(pattern, filter_keys)
+	local markers = markers_from_config(filter_keys or config.filter_keys(config.config.languages))
 	if not markers.strip then
 		return pattern, nil
 	end
@@ -290,32 +290,32 @@ function M.parse_forced(pattern, force_keys)
 	return clean, best_lang
 end
 
-local function forced_langs(base, forced)
+local function locked_langs(base, locked)
 	return {
-		zhcn = forced == "zhcn",
-		ja = forced == "ja",
-		ko = forced == "ko",
-		en = forced == "en" or base.en,
+		zhcn = locked == "zhcn",
+		ja = locked == "ja",
+		ko = locked == "ko",
+		en = locked == "en" or base.en,
 		mixed_input = base.mixed_input,
 	}
 end
 
 ---@param langs table boolean language flags (see config.lang_flags)
----@param force_keys table? per-jump force_keys override
+---@param filter_keys table? per-jump filter_keys override
 ---@return fun(pattern: string): string, string
-function M.make_mix_mode(langs, force_keys)
+function M.make_mix_mode(langs, filter_keys)
 	local comma = comma_map(langs)
-	local markers = force_keys ~= nil and markers_from_config(force_keys) or nil
+	local markers = filter_keys ~= nil and markers_from_config(filter_keys) or nil
 	return function(str)
-		local clean, forced
+		local clean, locked
 		if markers then
-			clean, forced = M.parse_forced(str, force_keys)
+			clean, locked = M.parse_filter(str, filter_keys)
 		else
-			clean, forced = M.parse_forced(str)
+			clean, locked = M.parse_filter(str)
 		end
 		local eff_langs, eff_comma = langs, comma
-		if forced then
-			eff_langs = forced_langs(langs, forced)
+		if locked then
+			eff_langs = locked_langs(langs, locked)
 			eff_comma = comma_map(eff_langs)
 		end
 		local all = parser(clean, nil, { count = 0, langs = eff_langs, comma = eff_comma })

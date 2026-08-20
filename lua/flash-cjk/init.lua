@@ -13,7 +13,7 @@ local M = {}
 -- config module's state table.
 M.resolve_langs = config.resolve_langs
 M.make_mix_mode = match.make_mix_mode
-M.parse_forced = match.parse_forced
+M.parse_filter = match.parse_filter
 setmetatable(M, {
 	__index = function(_, key)
 		if key == "config" then
@@ -22,8 +22,10 @@ setmetatable(M, {
 			-- built on first access: an eager build would load every
 			-- language data table at startup, and the plugin itself only
 			-- compiles per-jump modes in build_opts
-			local mode =
-				match.make_mix_mode(config.lang_flags(), config.force_keys(config.config.languages))
+			local mode = match.make_mix_mode(
+				config.lang_flags(),
+				config.filter_keys(config.config.languages)
+			)
 			rawset(M, "mix_mode", mode)
 			return mode
 		end
@@ -42,7 +44,7 @@ local function get_flash()
 end
 
 local function build_opts(langs)
-	local keys = config.force_keys(M.config.languages)
+	local keys = config.filter_keys(M.config.languages)
 	local mode = M.make_mix_mode(langs, keys)
 	local actions = {}
 	for _, lang in ipairs({ "zhcn", "ja", "ko", "en" }) do
@@ -50,7 +52,9 @@ local function build_opts(langs)
 		if type(key) == "string" and key ~= "" then
 			local marker = match.MARKER_BYTES[lang]
 			actions[vim.api.nvim_replace_termcodes(key, true, true, true)] = function(state, _)
-				state:update({ pattern = state.pattern:extend(marker) })
+				-- a new lock replaces any previous one
+				local clean = match.parse_filter(state.pattern.pattern)
+				state:update({ pattern = clean .. marker })
 				return true
 			end
 		end
@@ -103,8 +107,8 @@ function M.setup(opts)
 		end
 		for lang, value in pairs(opts.languages) do
 			local normalized = config.normalize_language(lang, value)
-			M.config.languages[lang] =
-				vim.tbl_deep_extend("force", {}, M.config.languages[lang], normalized)
+			local base = M.config.languages[lang] or config.language_base(lang)
+			M.config.languages[lang] = vim.tbl_deep_extend("force", {}, base, normalized)
 		end
 	end
 	if type(opts.mixed_input) == "boolean" then

@@ -2,206 +2,160 @@
 
 # flash-cjk.nvim
 
-Neovimで簡体字中国語・日本語・韓国語の任意の文字に、そのピンイン・
-ローマ字・ローマ字表記を入力してジャンプできます — IMEの切り替えは不要です。
-[flash.nvim](https://github.com/folke/flash.nvim) をベースに、
-[flash-zh.nvim](https://github.com/rainzm/flash-zh.nvim) からフォークして作られました。
-
-[English](README.md) · [简体中文](README.zh.md) · [日本語](README.ja.md) · [한국어](README.ko.md)
+[flash.nvim](https://github.com/folke/flash.nvim) に、中国語・日本語・韓国語のテキストへのジャンプ機能を追加します。
 
 [![Validate](https://github.com/fang2hou/flash-cjk.nvim/actions/workflows/validate.yml/badge.svg)](https://github.com/fang2hou/flash-cjk.nvim/actions/workflows/validate.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 
+[English](README.md) · [简体中文](README.zh.md) · **日本語** · [한국어](README.ko.md)
+
 </div>
 
-ジャンプ先のCJK文字をCJK入力で指定するとなると、操作の途中でIMEと格闘する
-ことになります。flash-cjkなら手元はASCIIのままです。`ni` は 你 / 日 / に / ニ
-に届き、`r` はピンインの声母で 日 にヒットし、`dkss` は2ボル式（두벌식）
-のキー列で 안녕 にヒットします。その一方で、素のアルファベットは
-flash.nvimとまったく同じようにリテラル一致します。
+[flash.nvim](https://github.com/folke/flash.nvim) は強力で柔軟な Neovim ジャンププラグインですが、主に ASCII テキストを対象としているため、CJK テキストでは使い勝手に制限があります。**flash-cjk.nvim** はそのマッチング機能を拡張し、使い慣れた入力方式のまま中国語・日本語・韓国語のテキストを検索してジャンプできるようにします。既存の ASCII リテラルマッチは従来どおり動作します。さらに、オプションの Rust ネイティブマッチャーも用意しており、多言語・混合入力・長いクエリといった場面でレイテンシを大幅に抑えられます。
 
-- 対応範囲：簡体字中国語のピンイン（小鶴双拼と声母）、日本語のローマ字
-  （漢字の読み＋かな、ヘボン式と訓令式）、韓国語（RRローマ字表記と
-  2ボル式（두벌식）のキー列）、ASCIIリテラル — すべて同時に、かつ独立に
-  オン/オフできます
-- 対象外：flash.nvim自体の機能（treesitterジャンプ、リモートなど）の置き
-  換え、IME統合、NFDの韓国語ファイル名（下記「機能」の既知の制限を参照）
-- 状態：活発に開発中
+通常の flash.nvim のマッチングに加えて、次の入力方式によるマッチングに対応します：
 
-## 🚀 使い方
+- 🇨🇳 **簡体字中国語**：小鶴双拼
+- 🇯🇵 **日本語**：ローマ字
+- 🇰🇷 **韓国語**：두벌식（Dubeolsik）またはローマ字
 
-[flash.nvim](https://github.com/folke/flash.nvim) と Neovim ≥ 0.10 が必要です。
-[lazy.nvim](https://github.com/folke/nvim-lazy) でインストールします：
+## 🚀 インストール
+
+Neovim ≥ 0.10 と [flash.nvim](https://github.com/folke/flash.nvim) が必要です。Rust ツールチェーンはオプションで、ネイティブマッチャーをビルドする場合のみ必要です。[lazy.nvim](https://github.com/folke/lazy.nvim) でのインストール例：
 
 ```lua
-return {{
-    "fang2hou/flash-cjk.nvim",
-    event = "VeryLazy",
-    dependencies = "folke/flash.nvim",
-    -- Optional Rust accelerator (see "⚡ Performance"): built on
-    -- install/update; without cargo the plugin silently uses the vim-regex
-    -- path instead. Delete this line to skip the build entirely.
-    build = "cargo build --release --manifest-path=rust/Cargo.toml",
-    keys = {{
-        "s",
-        mode = {"n", "x", "o"},
-        function()
-            require("flash-cjk").jump()
-        end,
-        desc = "Flash jump (CJK + ASCII)"
-    }},
-    opts = {
-        languages = {
-            zhcn = {force_key = "<C-c>"},  -- default: enabled, scheme "xiaohe"
-            ja = {force_key = "<C-j>"},         -- default scheme: "roma"
-            ko = {force_key = "<C-k>"},
-            en = {force_key = "<C-e>"},         -- en has no scheme concept
-        },
-        mixed_input = true,
-    }
-}, {
-    "folke/flash.nvim",
-    event = "VeryLazy",
-    opts = {
-        highlight = {
-            backdrop = false,
-            matches = false
-        }
-    }
-}}
+{
+	"fang2hou/flash-cjk.nvim",
+	event = "VeryLazy",
+	dependencies = {
+		"folke/flash.nvim",
+		keys = { { "s", false } },
+	},
+	-- オプショナル：Rust ネイティブマッチャー
+	-- 多言語・長い入力では大きな性能向上が見込めます。不要ならこの行を削除してください。
+	build = "cargo build --release --manifest-path=rust/Cargo.toml",
+	opts = {},
+	keys = {
+		{
+			"s",
+			mode = { "n", "x", "o" },
+			function()
+				require("flash-cjk").jump()
+			end,
+			desc = "Flash jump (CJK + ASCII)",
+		},
+	},
+}
 ```
 
-lazy.nvim を使っていない場合は、上の `opts` と同じオプションで
-`require("flash-cjk").setup({ ... })` を自分で呼び出してください。
+## ⚙️ 設定
 
-`s` を押し、入力し、ジャンプ — この一連の流れはflash.nvimと同じです。目的
-の文字にまだラベルが表示されていないときは、（検索と同様に）入力を続けて
-ください。ラベルには小文字が使われ、表示中のマッチに対して次に入力しうる
-文字と衝突することはありません。
+デフォルト設定：
 
-**AIコーディングエージェントで使う** — リポジトリをエージェントに任せるときは、
-以下を貼り付けてください：
+```lua
+{
+	languages = {
+		zhcn = { enabled = true, filter_key = "<C-c>" },
+		ja = { enabled = true, filter_key = "<C-j>" },
+		ko = { enabled = true, filter_key = "<C-k>" },
+	},
+	priority = { "zhcn", "ja", "ko" },
+	mixed_input = true,
+}
+```
+
+### `languages`
+
+言語ごとにマッチングへ参加するかどうかを設定できます。`enabled = false` にした言語は、`priority` の設定にかかわらず検索対象から外れます。
+
+`filter_key` は検索中に**対象言語を固定する**ために使います。押すと、その言語と ASCII リテラルマッチの結果だけが残ります。デフォルトのキー：
+
+| 言語         | コード | ロックキー |
+| ------------ | ------ | ---------- |
+| 簡体字中国語 | `zhcn` | `<C-c>`    |
+| 日本語       | `ja`   | `<C-j>`    |
+| 韓国語       | `ko`   | `<C-k>`    |
+| ASCII        | `en`   | `<C-e>`    |
+
+`en` は組み込みの言語なので、`languages` への設定は不要です。
+
+### `priority`
+
+複数の言語が同時にマッチした場合、`priority = { "zhcn", "ja", "ko" }` が Flash ラベルを割り当てる優先順位を決めます。リストの前方にある言語ほど優先度が高くなります。
+
+### `mixed_input`
+
+1 回のクエリに、異なる言語の入力コードを混在させられます。入力例は下の使い方の「混合入力」を参照してください。
+
+## ⌨️ 使い方
+
+操作は flash.nvim とほぼ同じです。`s` を押し、目的のテキストに対応する入力コードを入力するだけです。以下の例では、トリガーキー `s` を含めた完全なキー列で示します。
 
 ```text
-Work in this repository. Read AGENTS.md at the repository root first and follow it.
+English, a中文，日本語, 한국어. Hello, 你好，こんにちは、안녕하세요.
 ```
 
-**プラグインの開発やベンチマーク**には、macOS または Linux での
-[mise](https://mise.jdx.dev/) が必要です：
+### ASCII
 
-```bash
-mise install
-mise run test
-```
+`si` と入力すると（`s` で flash-cjk を起動し、`i` がクエリになります）、`English` の `i` にマッチします。通常の flash.nvim と同じ挙動です。
 
-`mise run` で他のすべてのタスク（`check`、`e2e`、`codegen`、`format`）を
-一覧できます。詳しくは [DEVELOPMENT.md](./DEVELOPMENT.md) を参照してください。
+### 混合入力
 
-<details>
-<summary>Rustアクセラレータ：いつ必要で、いつ不要か</summary>
+`sav` と入力すると「a中」にマッチします。`a` は ASCII としてリテラルマッチし、`v` は小鶴双拼における「中」の入力コードのプレフィックスです。
 
-上の `build =` 行は、cargoが利用可能な場合にのみ任意のネイティブマッチャーを
-ビルドします。手動ビルドは `cd rust && cargo build --release` です。Rustは
-必須ではありません。バイナリがなくてもプラグインは黙ってvim-regexパスを
-使います（結果は同一。相互検証で保証）。サンドボックスや制限された環境では
-`build =` 行を削除してください — 純Luaパスはコンパイラ不要で、プロセスも
-起動しません。
+### 多言語マッチング
 
-</details>
+`sn` と入力すると、クエリ文字 `n` が次のすべてに同時にマッチします：
 
-## 💡 概念
+- `n`：ASCII のアルファベット
+- `中`：日本語ローマ字 `naka`
+- `日`：日本語ローマ字 `nichi`
+- `你`：中国語小鶴双拼 `ni`
+- `ん`：日本語ローマ字 `nn`
+- `に`：日本語ローマ字 `ni`
+- `안`：韓国語ローマ字 `an`
 
-- **解釈（Interpretations）** — キーストローク列はリテラル文字と言語コード
-  （ピンイン、ローマ字、ローマ字表記）に分割されます。同じ入力の妥当な読みは
-  すべて一度に到達可能なままです。`ni` は簡体字中国語（你）と日本語
-  （日 / に / ニ）の両方に一致します。
-- **言語の固定（Language lock）** — 入力中に `C-c` / `C-j` / `C-k` / `C-e` を
-  押すと、一致対象を 簡体字中国語 / 日本語 / 韓国語 / 英語 に固定し、即座に
-  再計算します。`C-c` の後は簡体字中国語の読みだけが残り、ちは一致しなく
-  なります。固定は入力文字列に積まれていくため、**マーカーをバックスペース
-  で削除すると固定が解除されます**。別の固定キーを押すと即座に切り替わり
-  ます。固定キーは言語ごとに設定できます（`force_key`、`false` で無効化）。
-- **混合入力（Mixed input）** — キーストローク列は、一部をリテラル、一部を
-  言語コードとして読めます。`nn` と打つと `日n` に届きます（ローマ字 `n` +
-  リテラル `n`）。ミラーの `n日` は、先頭リテラルが常に許可されるため、
-  どのモードでも一致します。`mixed_input = false` にすると落ちるのは
-  「言語→リテラル」の逆の形だけで、3言語の長い入力で最悪ケースのレイテンシが
-  40〜60%減ります — 長い入力で目に見えて遅延しない限り、デフォルトのままに
-  してください。
-- **ジャンプ単位の言語セット** — 各言語は `languages` テーブルで独立に設定
-  します（`setup` によるグローバル指定、またはジャンプ単位：
-  `jump({ "ja", "ko", "en" })` はそのジャンプでは簡体字中国語に一致しません）。
-  `setup` は深くマージし、`true`/`false` の簡略記法は `enabled` を切り替え
-  ます。句読点はスイッチに従います：`zhcn` がオフのとき、`,` は，（全角
-  コンマ）ではなく 、（日本語）に一致します。
+候補が多すぎる場合は、いつでも対象言語を固定して絞り込めます：
 
-## ✨ 機能
+| キー    | 残るマッチ     |
+| ------- | -------------- |
+| `<C-c>` | 中国語 + ASCII |
+| `<C-j>` | 日本語 + ASCII |
+| `<C-k>` | 韓国語 + ASCII |
+| `<C-e>` | ASCII のみ     |
 
-- **簡体字中国語（`zhcn`）** — 小鶴双拼（Xiaohe double-pinyin）の2キー
-  コードか、ピンインの声母を入力します：`ni` → 你、`r` → 日。すべての漢字が
-  2キーコードで到達可能で、1文字だけならその声母で始まるピンインの漢字
-  すべてに一致します。スキームは `"xiaohe"`（現時点で唯一。今後追加可能）。
-- **日本語（`ja`）** — ローマ字でマッチします：`ni` は 日 に、`ti` は ち
-  （訓令式）にヒットします。漢字は Unicode Unihan 由来の読み（約13,000字）を、
-  3文字までのローマ字プレフィックスで一致させます（`n`/`ni`/`nic` はいずれも
-  日 にヒット）。かなはその音節の一般的なローマ字表記すべてに一致します
-  （`si`/`shi`、`tu`/`tsu`）。拗音のペアは1単位として一致します
-  （`sha` → しゃ/シャ）。`-` は長音 ー に、`[` と `]` は 「」 と 『』 に、
-  `,` は読点 、 に、`!` は ！ に一致します。
-- **韓国語（`ko`）** — 2ボル式（두벌식、Dubeolsik、韓国の標準キーボード）の
-  キー列：`dks` → 안、`gkrry` → 학교、`dkswek` → 앉다。またはローマ字表記：
-  RR（Revised Romanization of Korean、로마자 표기법）に加えて一般的な
-  マキューン＝ライシャワー式のつづり（`kim`/`gim` → 김）を、音節ごとに
-  プレフィックス一致します。音節はプログラム的に字母（ジャモ）へ分解され
-  ます — 辞書データは不要です。濃音のジャモは2ボル式ではシフトが必要なので、
-  代わりにローマ字（`kk`）を使ってください。母音のみのセグメントは、日本語の
-  母音と同様に入力途中でも機能します（`ai` → 아이）。
-- **英語（`en`）** — 素のASCIIは、flash.nvim自体の検索とまったく同じように
-  1文字ずつリテラル一致します。コードの識別子は言語解釈なしで到達可能です。
-  `en` を無効にしても数字と大文字は引き続きリテラル一致し、有効などの言語も
-  解釈できない入力（`n.` など）はリテラル一致へフォールバックします。
-- **優先ラベル（Priority labels）** — `priority = { "ja", "zhcn" }` はラベル
-  割り当ての順序を決めます。リストの前方の言語で到達できる一致が最も早い
-  ラベルを受け取るため、主言語の目標は最も少ないラベルキーでジャンプでき
-  ます。一致セットとジャンプのセマンティクスは変わらず、未設定なら位置順序
-  のままです。
-
-既知の制限：macOSは韓国語のファイル名をNFD（分解済みジャモ）で保存します。
-両方のマッチパスはNFCの合成済み音節を対象とするため、oil/netrw のファイル名
-バッファ内でのジャンプでは韓国語ファイル名に一致しません。通常のコード
-バッファやドキュメントバッファはNFCなので影響を受けません。
+たとえば `<C-c>` を押すと、`n` と `你` だけが残ります。バックスペースでフィルタを解除でき、別のロックキーを押せばそのまま切り替えられます。
 
 ## ⚡ パフォーマンス
 
-短いプレフィックス（1〜2文字）なら、内蔵の vim-regex パスで中央値約
-0.5 ms で応答します（1言語のみ有効なら 0.1〜0.9 ms）。重いのはこのパスでの
-3言語の長い入力です：最も重い組み合わせで平均約 30 ms、p95 は 134〜243 ms
-に達します。任意のネイティブマッチャーは最悪ケースを平坦化します — 平均は
-全体で 8.5×、p95 テールは 6.7×（最も重い組み合わせで最大 27×）下がり、
-正規表現の選択肢が Vim でコンパイルできなくなった（E872）パターンでも
-動作し続けます。一度ビルドすると自動的に有効になります。
+flash-cjk.nvim には 2 つのマッチング経路があります。Neovim / Vim の regex マッチングと、オプションの Rust ネイティブマッチャーです。1 言語・短い入力ではどちらもレイテンシは低く、差が大きくなるのは多言語・長い入力・候補テキストが多い場面です。4 言語すべての組み合わせを含むベンチマークの結果：
+
+|                  | vim-regex |        Rust |         高速化 |
+| ---------------- | --------: | ----------: | -------------: |
+| 全体の平均       |   8.23 ms | **0.97 ms** |           8.5× |
+| 全体の p95       |   29.1 ms | **4.35 ms** |           6.7× |
+| 一部の高負荷場面 |           |             | **最大約 27×** |
+
+vim-regex の負荷が最も高い場面では、一部の 3 言語組み合わせで平均が 30 ms 近く、p95 は 243 ms に達します。Rust マッチャーは、主にこうした極端なケースでの入力遅延を抑えるためのものです。
+
+### Rust 常駐サービス
+
+Rust マッチャーは初回使用時に常駐サービスを自動起動し、以降のクエリではそのプロセスを再利用します。これにより、マッチのたびにプロセスを作り直すオーバーヘッドを避けられます。また、複数の Neovim インスタンスで同じサービスを共有するため、エディタのインスタンスごとにサービスが起動することはありません。
+
+<details>
+<summary><strong>完全なベンチマーク：vim-regex vs Rust matcher</strong></summary>
 
 <p align="center">
   <img
     src="assets/benchmark.svg"
-    alt="ベンチマーク：完全な 15 組み合わせ言語マトリクスにおける vim-regex 経路と常駐サーバー上のネイティブ Rust マッチャーのキーストロークあたりコスト"
+    alt="完全な 15 組み合わせ言語マトリクスにおける vim-regex 経路と Rust matcher の 1 キーストロークあたりのレイテンシ"
     width="720"
-  />
+  >
 </p>
 
-完全な言語組み合わせマトリクス（4 言語コード——`zhcn`（簡体字中国語）、
-`ja`（日本語）、`ko`（韓国語）、`en`（英語）——の単一・2 つ・3 つ・4 つ
-すべての組み合わせ、15 組 × 70 ウィンドウ = 1,050 個の 20–60 行生成
-ウィンドウ）で、実際のキーストローク経路を測定しました。各行はその行の言語
-のみを有効化し、それらの言語からウィンドウテキストをサンプリングし、その
-言語で妥当な 1–6 キーストロークを入力します（`en` 単独行は純粋な ASCII
-単語）。シードは固定で再現可能です。
+テストでは、`zhcn`（簡体字中国語）、`ja`（日本語）、`ko`（韓国語）、`en`（ASCII）の 4 言語を対象に、15 の言語組み合わせ × 70 ウィンドウ = 1,050 個のウィンドウを生成します。各ウィンドウには 20–60 行のテキストが含まれ、その言語組み合わせに対応する内容だけが生成されます。テスト中は妥当なクエリ文字を 1–6 個入力し、実際の vim-regex 経路と Rust 常駐サービス経路の 1 キーストロークあたりのレイテンシを比較します。
 
-**Rust（server）** はネイティブ経路であり、実際のキーストロークが使う経路
-です。キーストロークごとに常駐マッチャーサーバーへ 1 リクエストを送ります
-（下記参照）。
-
-単一言語——1 つの言語のみ有効：
+### 単一言語
 
 | ウィンドウ言語 | vim-regex 平均 | Rust server |  比率 | vim-regex p95 | server p95 |
 | -------------- | -------------: | ----------: | ----: | ------------: | ---------: |
@@ -210,7 +164,7 @@ mise run test
 | `en`           |        0.08 ms |     0.11 ms | 0.75× |        0.1 ms |    0.14 ms |
 | `ko`           |        0.08 ms |     0.10 ms | 0.81× |        0.2 ms |    0.16 ms |
 
-2 言語——2 つを有効：
+### 2 言語
 
 | ウィンドウ言語 | vim-regex 平均 | Rust server |  比率 | vim-regex p95 | server p95 |
 | -------------- | -------------: | ----------: | ----: | ------------: | ---------: |
@@ -221,7 +175,7 @@ mise run test
 | `zhcn` + `ja`  |        1.04 ms |     0.16 ms |  6.4× |        3.6 ms |    0.34 ms |
 | `zhcn` + `ko`  |        0.24 ms |     0.13 ms |  1.8× |        0.6 ms |    0.25 ms |
 
-3 言語——3 つを有効：
+### 3 言語
 
 | ウィンドウ言語       | vim-regex 平均 | Rust server |  比率 | vim-regex p95 | server p95 |
 | -------------------- | -------------: | ----------: | ----: | ------------: | ---------: |
@@ -230,79 +184,50 @@ mise run test
 | `zhcn` + `ja` + `ko` |        9.07 ms |     0.67 ms | 13.6× |       47.5 ms |    2.40 ms |
 | `zhcn` + `ko` + `en` |        5.80 ms |     1.83 ms |  3.2× |       32.9 ms |   10.88 ms |
 
-4 言語すべて有効：
+### 4 言語
 
 | ウィンドウ言語               | vim-regex 平均 | Rust server |     比率 | vim-regex p95 |  server p95 |
 | ---------------------------- | -------------: | ----------: | -------: | ------------: | ----------: |
 | `zhcn` + `ja` + `ko` + `en`  |       16.26 ms |     1.90 ms |     8.6× |       95.0 ms |    14.04 ms |
 | **全体（1,050 ウィンドウ）** |    **8.23 ms** | **0.97 ms** | **8.5×** |   **29.1 ms** | **4.35 ms** |
 
-**方法論。** 各ケースは 1 回のウォームアップの後、3 回の実測の中央値
-（`vim.uv.hrtime`）を報告します。行はグループ内で vim-regex 平均順に並べて
-います。比率は vim-regex 平均 ÷ Rust server 平均で、1× 未満なら純 Lua 経路が
-高速です。vim-regex の計測は実際のキーストロークが払うすべて（パターン分割、
-選択肢構築、`vim.regex()` コンパイル、可視行すべてのスキャン）を含みます。
-Rust の計測は常駐サーバーへの 1 回の UDS リクエスト——実際のキーストロークと
-完全に同じ転送です。今回の実行では 1,050 パターンのうち 0 件が Vim の NFA
-キャプチャグループ上限（E872）に達しましたが、達しても Rust マッチャーは
-動作し続けます。
-
-**読み方。** サーバーはプロセス生成とデータテーブル構築を自身の起動時に
-1 回だけ支払い、あとは 0.09–2.5 ms のフラットな帯で応答します。15 カテゴリ中
-13 が Rust 優位で、残る 2 つ（`en`/`ko` 単独）も 0.08 対 0.10–0.11 ms と、
-どちらも 0.2 ms 未満です。重要なのはテールです。最も重い組み合わせ
-（`ja`+`en`、`zhcn`+`ja`+`en`）の p95 は vim-regex の 134–243 ms から
-5.0–14.8 ms へ、全体の p95 も 29.1 ms から 4.4 ms へ下がります。
-
-<details>
-<summary>バックグラウンドサービス（Unix、設定不要）</summary>
-
-バイナリが存在するとき、プラグインはユーザーごとに 1 つのマッチャー
-サーバーを透過的に維持します：
-
-- **ライフサイクル**：Neovim インスタンスはアイドルなセッション接続を開いて
-  いる間だけ登録されます。Neovim を終了（あるいは `kill -9`）すると登録は
-  即座に外れ、どのインスタンスも 2 秒間（`FLASH_CJK_SERVER_GRACE_MS`）接続
-  していなければ、サーバーは自身のソケットを削除して終了します。最後の
-  インスタンスが抜けるとサーバーも消えます——ポーリングもデーモン管理も
-  設定も不要です。
-- **メモリ**：常駐プロセスは 1 つ（約 12.4 MB RSS）で、少なくとも 1 つの
-  Neovim インスタンスが使用している間だけ存在します。加えてキーストローク
-  ごとに約 0.04 ms の Unix ドメインソケット往復がかかるだけです。CPU/
-  バッテリーの消費は入力量に比例し、プロセス起動回数には比例しません。
-- **自動フォールバック**：転送の一時的な失敗（タイムアウト、クラッシュ）は
-  そのキーストロークを spawn 転送に落とし、サーバーを非同期で復活させます。
-  失敗が続けばサーキットブレーカーが作動し vim-regex 経路へ落ちます。
-  Windows と過長なソケットパス（`sun_path` 上限）は spawn 転送のままです。
-
-バイナリは約 1.8 MB で、データテーブルを静的に埋め込み、ランタイム依存は
-ありません。常駐メモリが乏しい環境やプロセス起動が制限される環境では、
-純 vim-regex 経路（バイナリをビルドしない）を推奨します。
-
 </details>
 
-自分のマシンで再現するには：
+## 🛠️ 開発
 
-```sh
-cargo build --release --manifest-path rust/Cargo.toml
-nvim -l benches/compare.lua # writes benches/results.json
-uv run benches/gen_svg.py   # regenerates assets/benchmark.svg
+### AI コーディングエージェントを使う
+
+リポジトリをそのままコーディングエージェントに渡したい場合は、次の指示を貼り付けてください：
+
+```text
+Work in this repository. Read AGENTS.md at the repository root first and follow it.
 ```
 
-## 📚 次に読むドキュメント
+### ローカル開発
 
-| 目的                       | ドキュメント                                                               |
-| -------------------------- | -------------------------------------------------------------------------- |
-| システムを理解する         | [ARCHITECTURE.md](./ARCHITECTURE.md)                                       |
-| 開発と検証                 | [DEVELOPMENT.md](./DEVELOPMENT.md)                                         |
-| 変更をコントリビュートする | [CONTRIBUTING.md](./CONTRIBUTING.md)                                       |
-| エージェントに渡す         | [AGENTS.md](./AGENTS.md)                                                   |
-| ネイティブマッチャーの設計 | [rust/README.md](./rust/README.md)                                         |
-| 他の言語で読む             | [简体中文](README.zh.md) · [日本語](README.ja.md) · [한국어](README.ko.md) |
+このプロジェクトでは、開発用の依存関係とタスクをすべて [mise](https://mise.jdx.dev/) で管理しています。mise をインストールしたら、次のコマンドを実行します：
+
+```bash
+mise install
+mise run test
+```
+
+`mise run` でその他のタスク（`check`、`e2e`、`codegen`、`format`）を一覧できます。詳細は [DEVELOPMENT.md](./DEVELOPMENT.md) を参照してください。
+
+## 📚 ドキュメント
+
+| 目的                       | ドキュメント                                                             |
+| -------------------------- | ------------------------------------------------------------------------ |
+| システムを理解する         | [ARCHITECTURE.md](./ARCHITECTURE.md)                                     |
+| 開発と検証                 | [DEVELOPMENT.md](./DEVELOPMENT.md)                                       |
+| コントリビュートする       | [CONTRIBUTING.md](./CONTRIBUTING.md)                                     |
+| エージェントに渡す         | [AGENTS.md](./AGENTS.md)                                                 |
+| ネイティブマッチャーの設計 | [rust/README.md](./rust/README.md)                                       |
+| 他の言語で読む             | [English](README.md) · [简体中文](README.zh.md) · [한국어](README.ko.md) |
 
 ## 📄 ライセンス
 
-MIT — [LICENSE](./LICENSE) を参照してください。データは
-[Unicode Unihan Database](https://www.unicode.org/)（Unicode License）から
-生成したものです。[flash-zh.nvim](https://github.com/rainzm/flash-zh.nvim) と
+MIT ライセンスです。詳しくは [LICENSE](./LICENSE) を参照してください。データは
+[Unicode Unihan Database](https://www.unicode.org/)（Unicode License）をもとに
+生成しています。[flash-zh.nvim](https://github.com/rainzm/flash-zh.nvim) と
 [hop-zh-by-flypy](https://github.com/zzhirong/hop-zh-by-flypy) に感謝します。

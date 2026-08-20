@@ -42,9 +42,10 @@ function M.get_char_patch()
 	end
 end
 
--- Shows lock markers as readable [中]/[日]/[韩]/[英] tags in flash's
--- prompt instead of raw control bytes (^A, ^B, ...). Display only --
--- the pattern itself keeps its marker bytes.
+-- Shows lock markers as readable tags in flash's prompt instead of
+-- raw control bytes (^A, ^B, ...). Each language is tagged in its own
+-- script: [中] [日] [한] [EN]. Display only -- the pattern itself
+-- keeps its marker bytes.
 function M.prompt_patch()
 	local ok, Prompt = pcall(require, "flash.prompt")
 	if not ok or type(Prompt.set) ~= "function" or Prompt._flash_cjk_patched then
@@ -58,8 +59,8 @@ function M.prompt_patch()
 		local display = pattern
 			:gsub("\x01", " [中]")
 			:gsub("\x02", " [日]")
-			:gsub("\x04", " [韩]")
-			:gsub("\x05", " [英]")
+			:gsub("\x04", " [한]")
+			:gsub("\x05", " [EN]")
 		return orig(display, show)
 	end
 end

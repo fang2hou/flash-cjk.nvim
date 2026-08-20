@@ -2,204 +2,160 @@
 
 # flash-cjk.nvim
 
-Jump to any Simplified Chinese, Japanese, or Korean character in Neovim by
-typing its pinyin, romaji, or romanization — no IME switching. Built on
-[flash.nvim](https://github.com/folke/flash.nvim), forked from
-[flash-zh.nvim](https://github.com/rainzm/flash-zh.nvim).
-
-[English](README.md) · [简体中文](README.zh.md) · [日本語](README.ja.md) · [한국어](README.ko.md)
+Chinese, Japanese, and Korean jump support for [flash.nvim](https://github.com/folke/flash.nvim).
 
 [![Validate](https://github.com/fang2hou/flash-cjk.nvim/actions/workflows/validate.yml/badge.svg)](https://github.com/fang2hou/flash-cjk.nvim/actions/workflows/validate.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 
+**English** · [简体中文](README.zh.md) · [日本語](README.ja.md) · [한국어](README.ko.md)
+
 </div>
 
-Typing CJK text to jump to CJK text means fighting your IME mid-motion.
-flash-cjk keeps your hands in ASCII: `ni` lands on 你 / 日 / に / ニ, `r`
-hits 日 by pinyin initial, `dkss` hits 안녕 by Dubeolsik keys — while plain
-letters still match literally, exactly like flash.nvim.
+[flash.nvim](https://github.com/folke/flash.nvim) is a powerful and flexible Neovim jump plugin, but it is primarily designed for ASCII text, making navigation in CJK text less convenient. **flash-cjk.nvim** extends its matching so you can search and jump to Chinese, Japanese, and Korean text using familiar input methods, while preserving flash.nvim's existing literal ASCII matching. It also includes an optional native Rust matcher that significantly reduces latency with multiple languages, mixed input, and longer queries.
 
-- In scope: Simplified Chinese pinyin (Xiaohe double-pinyin and initials),
-  Japanese romaji (kanji readings plus kana, Hepburn and kunrei-shiki),
-  Korean (RR romanization and Dubeolsik key sequences), literal ASCII — all
-  simultaneously and independently toggleable
-- Out of scope: replacing flash.nvim's own features (treesitter jumps,
-  remote, …); IME integration; NFD Korean filenames (see known limitations
-  under Features)
-- Status: actively developed
+In addition to standard flash.nvim matching, it supports the following input schemes:
 
-## 🚀 Usage
+- 🇨🇳 **Simplified Chinese**: Xiaohe double pinyin
+- 🇯🇵 **Japanese**: romaji
+- 🇰🇷 **Korean**: Dubeolsik (두벌식) or romanization
 
-Requires [flash.nvim](https://github.com/folke/flash.nvim) and Neovim ≥ 0.10.
-Install with [lazy.nvim](https://github.com/folke/nvim-lazy):
+## 🚀 Installation
+
+Requires Neovim ≥ 0.10 and [flash.nvim](https://github.com/folke/flash.nvim). The Rust toolchain is optional and is only needed to build the native matcher. Install with [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
-return {{
-    "fang2hou/flash-cjk.nvim",
-    event = "VeryLazy",
-    dependencies = "folke/flash.nvim",
-    -- Optional Rust accelerator (see "⚡ Performance"): built on
-    -- install/update; without cargo the plugin silently uses the vim-regex
-    -- path instead. Delete this line to skip the build entirely.
-    build = "cargo build --release --manifest-path=rust/Cargo.toml",
-    keys = {{
-        "s",
-        mode = {"n", "x", "o"},
-        function()
-            require("flash-cjk").jump()
-        end,
-        desc = "Flash jump (CJK + ASCII)"
-    }},
-    opts = {
-        languages = {
-            zhcn = {force_key = "<C-c>"},  -- default: enabled, scheme "xiaohe"
-            ja = {force_key = "<C-j>"},         -- default scheme: "roma"
-            ko = {force_key = "<C-k>"},
-            en = {force_key = "<C-e>"},         -- en has no scheme concept
-        },
-        mixed_input = true,
-    }
-}, {
-    "folke/flash.nvim",
-    event = "VeryLazy",
-    opts = {
-        highlight = {
-            backdrop = false,
-            matches = false
-        }
-    }
-}}
+{
+	"fang2hou/flash-cjk.nvim",
+	event = "VeryLazy",
+	dependencies = {
+		"folke/flash.nvim",
+		keys = { { "s", false } },
+	},
+	-- Optional: Rust native matcher.
+	-- Significantly faster with multiple languages and longer input. Remove this line if you don't need it.
+	build = "cargo build --release --manifest-path=rust/Cargo.toml",
+	opts = {},
+	keys = {
+		{
+			"s",
+			mode = { "n", "x", "o" },
+			function()
+				require("flash-cjk").jump()
+			end,
+			desc = "Flash jump (CJK + ASCII)",
+		},
+	},
+}
 ```
 
-Not using lazy.nvim? Call `require("flash-cjk").setup({ ... })` yourself with
-the same options as `opts` above.
+## ⚙️ Configuration
 
-Press `s`, type, and jump — same flow as flash.nvim. If your target shows no
-label yet, keep typing (like a search); labels use lowercase letters and never
-collide with a plausible next input letter for a visible match.
+Default configuration:
 
-**With an AI coding agent** — paste this into the agent to hand it the repository:
+```lua
+{
+	languages = {
+		zhcn = { enabled = true, filter_key = "<C-c>" },
+		ja = { enabled = true, filter_key = "<C-j>" },
+		ko = { enabled = true, filter_key = "<C-k>" },
+	},
+	priority = { "zhcn", "ja", "ko" },
+	mixed_input = true,
+}
+```
+
+### `languages`
+
+Each language can be enabled or disabled for matching. With `enabled = false`, that language is excluded from the search regardless of how `priority` is configured.
+
+`filter_key` lets you **lock the search to a language** while typing, keeping only matches from that language plus literal ASCII. Default keys:
+
+| Language           | Code   | Lock key |
+| ------------------ | ------ | -------: |
+| Simplified Chinese | `zhcn` |  `<C-c>` |
+| Japanese           | `ja`   |  `<C-j>` |
+| Korean             | `ko`   |  `<C-k>` |
+| ASCII              | `en`   |  `<C-e>` |
+
+`en` is built in; it needs no entry in `languages`.
+
+### `priority`
+
+When multiple languages match at once, `priority = { "zhcn", "ja", "ko" }` determines the order in which matches receive Flash labels: languages listed earlier have higher priority.
+
+### `mixed_input`
+
+Allows a single query to mix input codes from different languages. See Mixed input in the usage examples below.
+
+## ⌨️ Usage
+
+Usage is almost identical to flash.nvim: press `s`, then type the input code for the target text. The examples below include the trigger key `s` as part of the full key sequence.
 
 ```text
-Work in this repository. Read AGENTS.md at the repository root first and follow it.
+English, a中文，日本語, 한국어. Hello, 你好，こんにちは、안녕하세요.
 ```
 
-**Developing or benchmarking the plugin** requires [mise](https://mise.jdx.dev/)
-on macOS or Linux:
+### ASCII
 
-```bash
-mise install
-mise run test
-```
+Type `si` (`s` starts flash-cjk and `i` is the query) to match the `i` in `English`, just as with regular flash.nvim.
 
-`mise run` lists every other task (`check`, `e2e`, `codegen`, `format`); see
-[DEVELOPMENT.md](./DEVELOPMENT.md).
+### Mixed input
 
-<details>
-<summary>Rust accelerator: when you need it, when you don't</summary>
+Type `sav` to match `a中`: `a` is matched literally as ASCII, while `v` is the Xiaohe double pinyin code prefix for `中`.
 
-The `build =` line above builds the optional native matcher only when cargo
-is available; manual build: `cd rust && cargo build --release`. You do not
-need Rust: without the binary the plugin silently uses the vim-regex path
-with identical results (enforced by cross-validation). In sandboxed or
-restricted environments, delete the `build =` line — the pure-Lua path needs
-no compiler and spawns no processes.
+### Multi-language matching
 
-</details>
+Type `sn`, and the query character `n` matches all of the following at once:
 
-## 💡 Concepts
+- `n`: ASCII letter
+- `中`: Japanese romaji `naka`
+- `日`: Japanese romaji `nichi`
+- `你`: Xiaohe double pinyin `ni`
+- `ん`: Japanese romaji `nn`
+- `に`: Japanese romaji `ni`
+- `안`: Korean romanization `an`
 
-- **Interpretations** — every keystroke chain is segmented into literal
-  letters and language codes (pinyin, romaji, romanization); each plausible
-  reading of the same input stays reachable at once. `ni` matches both
-  Simplified Chinese (你) and Japanese (日 / に / ニ).
-- **Language lock** — while typing, `C-c` / `C-j` / `C-k` / `C-e` lock
-  matching to Simplified Chinese / Japanese / Korean / English and recompute
-  instantly: after `C-c`, only the Simplified Chinese readings remain — ち
-  no longer matches. Locks stack into the input string, so **backspacing
-  over the marker releases it**; pressing another lock key switches
-  directly. Lock keys are configurable per language (`force_key`, or
-  `false` to disable).
-- **Mixed input** — a keystroke chain can be read part literally, part as
-  language codes. Typing `nn` reaches `日n` (romaji `n` + literal `n`); the
-  mirror text `n日` matches in every mode because literal heads are always
-  allowed. Turning `mixed_input = false` drops only the reverse shape
-  (language-then-literal) and cuts worst-case latency on long trilingual
-  inputs by 40–60% — keep the default unless long inputs visibly lag.
-- **Per-jump language set** — each language is configured independently
-  through the `languages` table (globally via `setup`, or per jump:
-  `jump({ "ja", "ko", "en" })` matches no Simplified Chinese for that one
-  jump). `setup` deep-merges; the `true`/`false` shorthand toggles
-  `enabled`. Punctuation follows the switches: with `zhcn` off, `,` matches
-  、(Japanese) instead of ，(fullwidth comma).
+If there are too many candidates, you can lock the search to a language at any time:
 
-## ✨ Features
+| Key     | Kept matches     |
+| ------- | ---------------- |
+| `<C-c>` | Chinese + ASCII  |
+| `<C-j>` | Japanese + ASCII |
+| `<C-k>` | Korean + ASCII   |
+| `<C-e>` | ASCII only       |
 
-- **Simplified Chinese (`zhcn`)** — type the Xiaohe double-pinyin
-  (小鹤双拼) two-key code, or a pinyin initial: `ni` → 你, `r` → 日. Every
-  character is reachable by its two-key code; a single letter matches any
-  character whose pinyin starts with it. Scheme: `"xiaohe"` (the only one
-  today; more can plug in later).
-- **Japanese (`ja`)** — romaji matching: `ni` hits 日, `ti` hits ち
-  (kunrei-shiki). Kanji readings from Unicode Unihan (~13,000 kanji) match
-  by romaji prefix up to 3 letters (`n`/`ni`/`nic` all hit 日); kana match
-  all common romanizations of their syllable (`si`/`shi`, `tu`/`tsu`);
-  youon pairs match as one unit (`sha` → しゃ/シャ); `-` matches ー,
-  `[`/`]` → 「」『』, `,` → 、, `!` → ！.
-- **Korean (`ko`)** — Dubeolsik (두벌식, the standard two-set keyboard)
-  sequences: `dks` → 안, `gkrry` → 학교, `dkswek` → 앉다. Or romanization:
-  RR (Revised Romanization of Korean, 로마자 표기법) plus common
-  McCune-Reischauer spellings (`kim`/`gim` → 김), matched per syllable by
-  prefix. Syllables decompose programmatically into jamo — no dictionary
-  data. Tense jamo need Shift on Dubeolsik — use romanization (`kk`)
-  instead; single-vowel segments work mid-input like Japanese vowels
-  (`ai` → 아이).
-- **English (`en`)** — plain ASCII matches literally, letter for letter,
-  exactly like flash.nvim's own search: code identifiers stay reachable
-  without any language interpretation. Even with `en` disabled, digits and
-  uppercase still match literally, and input no enabled language can
-  interpret (like `n.`) degrades to literal matching.
-- **Priority labels** — `priority = { "ja", "zhcn" }` orders label
-  assignment: matches reachable through earlier-listed languages receive
-  the earliest labels, so targets in your primary language need the fewest
-  label keys. Match sets and jump semantics are unchanged; unset keeps
-  plain position order.
-
-Known limitations: macOS stores Korean filenames in NFD (decomposed jamo);
-both matching paths target NFC precomposed syllables, so jumping in
-oil/netrw filename buffers won't match Korean filenames. Normal code and
-document buffers are NFC and unaffected.
+For example, press `<C-c>` and only `n` and `你` remain. Press Backspace to remove the filter, or press another lock key to switch directly.
 
 ## ⚡ Performance
 
-Short prefixes (1–2 letters) answer in ~0.5 ms median on the built-in
-vim-regex path (0.1–0.9 ms with one language enabled). The heavy case is
-long trilingual input on that path: up to ~30 ms mean with p95 at 134–243 ms
-on the heaviest mixes. The optional native matcher flattens the worst case —
-mean drops 8.5× overall, the p95 tail 6.7× (up to 27× on the heaviest mixes)
-— and keeps working on patterns whose regex alternation no longer compiles
-in Vim (E872). It turns on automatically once built.
+flash-cjk.nvim has two matching paths: Neovim / Vim regex matching and an optional native Rust matcher. Both have low latency with a single language and short input; the difference becomes more noticeable with multiple languages, longer input, and larger amounts of candidate text. In the full four-language combination benchmark:
+
+|                      | vim-regex |        Rust |        Speedup |
+| -------------------: | --------: | ----------: | -------------: |
+|      Overall average |   8.23 ms | **0.97 ms** |           8.5× |
+|          Overall p95 |   29.1 ms | **4.35 ms** |           6.7× |
+| Some heavy scenarios |           |             | **up to ~27×** |
+
+In the most demanding vim-regex scenarios, some three-language combinations average close to 30 ms, with p95 reaching 243 ms. The Rust matcher is primarily intended to reduce input latency in these extreme cases.
+
+### Rust resident server
+
+The Rust matcher automatically starts a persistent server the first time it is used. Subsequent queries reuse that process, avoiding the overhead of creating a new process for every match. Multiple Neovim instances share the same server instead of starting one per editor instance.
+
+<details>
+<summary><strong>Full benchmark: vim-regex vs Rust matcher</strong></summary>
 
 <p align="center">
   <img
     src="assets/benchmark.svg"
-    alt="Benchmark: per-keystroke cost of the vim-regex path vs the native Rust matcher over the persistent server across the full 15-combination language matrix"
+    alt="Per-keystroke latency of the vim-regex path vs the Rust matcher across the full 15-combination language matrix"
     width="720"
-  />
+  >
 </p>
 
-Measured on the live per-keystroke paths across the full language-combination
-matrix: every single, pair, triple, and the quad drawn from the four language
-codes — `zhcn` (Simplified Chinese), `ja` (Japanese), `ko` (Korean), `en`
-(English) — 15 combinations × 70 windows = 1,050 generated windows of 20–60
-lines. Each row enables only its own languages, samples window text from
-those languages, and types 1–6 plausible keystrokes for exactly those
-languages (the `en`-only row is pure ASCII words); the seed is deterministic.
+The benchmark covers four languages: `zhcn` (Simplified Chinese), `ja` (Japanese), `ko` (Korean), and `en` (ASCII), for 15 language combinations × 70 windows = 1,050 generated windows. Each window contains 20–60 lines of text and only includes content for its assigned language combination. Each run enters 1–6 plausible query characters and compares the per-keystroke latency of the actual vim-regex path with the Rust persistent server.
 
-**Rust (server)** is the native path live keystrokes use: one request per
-keystroke to the persistent matcher server (see below).
-
-Singles — one language enabled:
+### Single language
 
 | Window mix | vim-regex mean | Rust server | Ratio | vim-regex p95 | server p95 |
 | ---------- | -------------: | ----------: | ----: | ------------: | ---------: |
@@ -208,7 +164,7 @@ Singles — one language enabled:
 | `en`       |        0.08 ms |     0.11 ms | 0.75× |        0.1 ms |    0.14 ms |
 | `ko`       |        0.08 ms |     0.10 ms | 0.81× |        0.2 ms |    0.16 ms |
 
-Pairs — two languages enabled:
+### Two languages
 
 | Window mix    | vim-regex mean | Rust server | Ratio | vim-regex p95 | server p95 |
 | ------------- | -------------: | ----------: | ----: | ------------: | ---------: |
@@ -219,7 +175,7 @@ Pairs — two languages enabled:
 | `zhcn` + `ja` |        1.04 ms |     0.16 ms |  6.4× |        3.6 ms |    0.34 ms |
 | `zhcn` + `ko` |        0.24 ms |     0.13 ms |  1.8× |        0.6 ms |    0.25 ms |
 
-Triples — three languages enabled:
+### Three languages
 
 | Window mix           | vim-regex mean | Rust server | Ratio | vim-regex p95 | server p95 |
 | -------------------- | -------------: | ----------: | ----: | ------------: | ---------: |
@@ -228,67 +184,35 @@ Triples — three languages enabled:
 | `zhcn` + `ja` + `ko` |        9.07 ms |     0.67 ms | 13.6× |       47.5 ms |    2.40 ms |
 | `zhcn` + `ko` + `en` |        5.80 ms |     1.83 ms |  3.2× |       32.9 ms |   10.88 ms |
 
-All four languages enabled:
+### Four languages
 
 | Window mix                  | vim-regex mean | Rust server |    Ratio | vim-regex p95 |  server p95 |
 | --------------------------- | -------------: | ----------: | -------: | ------------: | ----------: |
 | `zhcn` + `ja` + `ko` + `en` |       16.26 ms |     1.90 ms |     8.6× |       95.0 ms |    14.04 ms |
 | **Overall (1,050 windows)** |    **8.23 ms** | **0.97 ms** | **8.5×** |   **29.1 ms** | **4.35 ms** |
 
-**Methodology.** Each case runs one warmup pass and reports the median of 3
-measured passes (`vim.uv.hrtime`); rows are sorted by vim-regex mean within
-each group. Ratio is vim-regex mean ÷ Rust server mean — below 1× the
-pure-Lua path is faster. The vim-regex timing covers everything a live
-keystroke pays: pattern segmentation, alternation build, `vim.regex()`
-compile, and the match scan over every visible line. The Rust timing is
-one UDS request to the persistent server — the exact transport live
-keystrokes use. 0 of 1,050 patterns hit Vim's NFA capture-group limit
-(E872) in this run, but the Rust matcher keeps working when one does.
-
-**How to read it.** The server pays process creation and data-table
-startup once at its own start, then answers in a flat 0.09–2.5 ms band:
-13 of 15 categories favor Rust, and the two that do not (`en`/`ko`
-singles) sit at 0.08 vs 0.10–0.11 ms — sub-0.2 ms either way. The tail
-is where it matters: the heaviest mixes (`ja`+`en`,
-`zhcn`+`ja`+`en`) drop from 134–243 ms p95 on vim-regex to 5.0–14.8 ms,
-and the overall p95 falls from 29.1 ms to 4.4 ms.
-
-<details>
-<summary>Background service (Unix, zero config)</summary>
-
-When the binary is present, the plugin transparently keeps one matcher
-server per user:
-
-- **Lifecycle**: the server registers a Neovim instance for exactly as
-  long as it holds one idle session connection open. Quit Neovim (or
-  `kill -9` it) and the registration drops instantly; once no instance
-  has been connected for 2 seconds (`FLASH_CJK_SERVER_GRACE_MS`), the
-  server removes its socket and exits. The last instance out takes the
-  server with it — no polling, no daemon management, no config.
-- **Memory**: one resident process at ~12.4 MB RSS, alive only while at
-  least one Neovim instance uses it, plus a ~0.04 ms Unix domain socket
-  round trip per keystroke. CPU/battery footprint tracks how much you
-  type, not how often you launch processes.
-- **Automatic fallback**: a transport hiccup (timeout, crash) falls back
-  to the per-keystroke spawn transport for that keystroke and revives
-  the server asynchronously; repeated failures trip the circuit breaker
-  down to the vim-regex path. Windows and over-long socket paths (the
-  `sun_path` cap) stay on the spawn transport.
-
-The binary is ~1.8 MB, statically carries its data tables, and has no
-runtime dependencies. Prefer the pure vim-regex path (i.e. simply don't
-build the binary) when resident memory is scarce or process launches are
-restricted.
-
 </details>
 
-Reproduce on your own machine:
+## 🛠️ Development
 
-```sh
-cargo build --release --manifest-path rust/Cargo.toml
-nvim -l benches/compare.lua # writes benches/results.json
-uv run benches/gen_svg.py   # regenerates assets/benchmark.svg
+### Using an AI coding agent
+
+To hand the repository directly to a coding agent, use:
+
+```text
+Work in this repository. Read AGENTS.md at the repository root first and follow it.
 ```
+
+### Local development
+
+The project uses [mise](https://mise.jdx.dev/) to manage all development dependencies and tasks. After installing mise, run:
+
+```bash
+mise install
+mise run test
+```
+
+`mise run` lists all other tasks (`check`, `e2e`, `codegen`, `format`). See [DEVELOPMENT.md](./DEVELOPMENT.md) for details.
 
 ## 📚 Learn More
 
@@ -296,14 +220,14 @@ uv run benches/gen_svg.py   # regenerates assets/benchmark.svg
 | ------------------------ | -------------------------------------------------------------------------- |
 | Understand the system    | [ARCHITECTURE.md](./ARCHITECTURE.md)                                       |
 | Develop and validate     | [DEVELOPMENT.md](./DEVELOPMENT.md)                                         |
-| Contribute a change      | [CONTRIBUTING.md](./CONTRIBUTING.md)                                       |
-| Give it to an agent      | [AGENTS.md](./AGENTS.md)                                                   |
+| Contribute               | [CONTRIBUTING.md](./CONTRIBUTING.md)                                       |
+| Hand it to an AI agent   | [AGENTS.md](./AGENTS.md)                                                   |
 | Native matcher design    | [rust/README.md](./rust/README.md)                                         |
 | Read in another language | [简体中文](README.zh.md) · [日本語](README.ja.md) · [한국어](README.ko.md) |
 
 ## 📄 License
 
-MIT — see [LICENSE](./LICENSE). Data derived from the
-[Unicode Unihan Database](https://www.unicode.org/) (Unicode License).
-Thanks to [flash-zh.nvim](https://github.com/rainzm/flash-zh.nvim) and
+MIT — see [LICENSE](./LICENSE). Data is derived from the
+[Unicode Unihan Database](https://www.unicode.org/) (Unicode License). Thanks to
+[flash-zh.nvim](https://github.com/rainzm/flash-zh.nvim) and
 [hop-zh-by-flypy](https://github.com/zzhirong/hop-zh-by-flypy).

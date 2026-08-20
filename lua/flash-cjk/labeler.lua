@@ -6,7 +6,7 @@ M.__index = M
 ---@class FlashCjk.Labeler
 ---@field state Flash.State
 ---@field langs table<string, boolean> enabled language flags
----@field force_keys table? per-jump force_keys override
+---@field filter_keys table? per-jump filter_keys override
 ---@field lang_ranks table<string, integer>? language -> priority rank
 ---@field default_rank integer? rank for languages absent from lang_ranks
 ---@field labels string[] label pool after skip filtering
@@ -17,13 +17,13 @@ M.__index = M
 
 ---@param state Flash.State
 ---@param langs table<string, boolean>? language flags, default all enabled
----@param force_keys table? per-jump force_keys override
+---@param filter_keys table? per-jump filter_keys override
 ---@param priority string[]? language codes in label-assignment priority order
-function M.new(state, langs, force_keys, priority)
+function M.new(state, langs, filter_keys, priority)
 	local self = setmetatable({}, M)
 	self.state = state
 	self.langs = langs or { zhcn = true, ja = true, ko = true, en = true }
-	self.force_keys = force_keys
+	self.filter_keys = filter_keys
 	if priority and #priority > 0 then
 		-- listed languages get their list position, everything else ties
 		-- on the trailing rank (filter()'s order stands among them)
@@ -172,7 +172,7 @@ end
 ---@return Flash.Match[] matches ordered for label issuance
 function M:sort_by_priority(matches)
 	local clean, forced =
-		require("flash-cjk.match").parse_forced(self.state.pattern.pattern, self.force_keys)
+		require("flash-cjk.match").parse_filter(self.state.pattern.pattern, self.filter_keys)
 	if forced then
 		return matches
 	end
@@ -209,7 +209,7 @@ end
 ---@return string[] labels without every predicted next letter of any match
 function M:skip(win, labels)
 	local prefix, forced =
-		require("flash-cjk.match").parse_forced(self.state.pattern.pattern, self.force_keys)
+		require("flash-cjk.match").parse_filter(self.state.pattern.pattern, self.filter_keys)
 	local prefix_len = string.len(prefix)
 	local langs = self.langs
 	if forced then

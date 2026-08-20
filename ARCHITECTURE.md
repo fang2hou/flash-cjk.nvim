@@ -18,7 +18,7 @@ input letter.
 
 - `init.lua` — public API (`setup`/`jump`/`remote`) and orchestration; re-exports
   the config/match helpers tests and users rely on
-- `config.lua` — configuration defaults, scheme registry, language-flag
+- `config.lua` — configuration defaults (en built-in), language-flag
   resolution (no flash.nvim dependency)
 - `match.lua` — matching domain: segmentation parser, punctuation classes,
   language-lock markers, mixed-mode compiler

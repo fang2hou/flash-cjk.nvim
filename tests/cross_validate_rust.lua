@@ -262,7 +262,7 @@ local function vim_attr_for(p, line, col, len)
 	local char_size = require("flash-cjk.util").char_size
 	local match_end = col + len -- 1-based inclusive end byte
 	local text = string.sub(line, col + 1, match_end + char_size(line, match_end + 1))
-	return require("flash-cjk.labeler").match_langs(text, (fc.parse_forced(p)), langs)
+	return require("flash-cjk.labeler").match_langs(text, (fc.parse_filter(p)), langs)
 end
 
 local function attr_key(t)
