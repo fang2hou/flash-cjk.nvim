@@ -132,8 +132,14 @@ fn is_comma_key(c: char, commas: &[(char, CharSet)]) -> bool {
     commas.iter().any(|(k, _)| *k == c)
 }
 
-fn jp_vowel(c: char) -> bool {
+pub(crate) fn jp_vowel(c: char) -> bool {
     matches!(c, 'a' | 'e' | 'i' | 'o' | 'u')
+}
+
+/// A romaji onset letter that is not a full syllable on its own:
+/// any ASCII letter except the vowels and `n` (ん).
+pub(crate) fn jp_consonant(c: char) -> bool {
+    c.is_ascii_alphabetic() && !jp_vowel(c) && c != 'n'
 }
 
 struct Compiler<'a> {
@@ -264,6 +270,23 @@ impl<'a> Compiler<'a> {
                         kind: SegKind::Jp,
                     });
                     self.parse(tail3, s, false);
+                }
+                // ja sokuon (geminate consonant): mid-pattern, a doubled
+                // consonant letter -- or `t` right before "ch" -- is the
+                // small っ/ッ on its own (kitte -> きって, matcha ->
+                // まっちゃ). Same class as the xtu/ltu prefixes, but
+                // keyed off the letters alone, so no table lookup.
+                if self.langs.ja
+                    && ((second == first && jp_consonant(first))
+                        || (first == 't' && second == 'c' && third == 'h'))
+                {
+                    let mut s = segs.clone();
+                    s.push(Segment {
+                        input: first.to_string(),
+                        matcher: SegMatcher::One(CharSet::from_chars("っッ")),
+                        kind: SegKind::Jp,
+                    });
+                    self.parse(tail2, s, false);
                 }
                 // ja 1-letter mid-pattern: vowels + n only
                 if self.langs.ja
@@ -469,5 +492,70 @@ mod tests {
                 assert_ne!(seg.matcher_kind(), crate::parser::SegKind::Cn);
             }
         }
+    }
+
+    /// True when `alts` contains the 1-letter geminate segment `c`
+    /// (class っッ only) at a mid-pattern position.
+    fn has_sokuon_seg(alts: &[Alt], c: char, followed_by: &str) -> bool {
+        alts.iter().any(|a| {
+            a.segments.iter().any(|s| {
+                s.input == c.to_string()
+                    && matches!(&s.matcher, SegMatcher::One(cs)
+                        if cs.contains('っ') && cs.contains('ッ') && !cs.contains('た'))
+            }) && a.segments.iter().any(|s| s.input == followed_by)
+        })
+    }
+
+    #[test]
+    fn sokuon_doubled_consonant_segments() {
+        // kitte -> ki|っ|te, kitta -> ki|っ|ta, ppo is the 1-letter っ too
+        assert!(has_sokuon_seg(
+            &compile("kitte", Langs::default()),
+            't',
+            "te"
+        ));
+        assert!(has_sokuon_seg(
+            &compile("kitta", Langs::default()),
+            't',
+            "ta"
+        ));
+        assert!(has_sokuon_seg(&compile("ppo", Langs::default()), 'p', "po"));
+    }
+
+    #[test]
+    fn sokuon_t_before_ch() {
+        // t + ch is the other geminate spelling: matcha -> ma|っ|cha
+        let alts = compile("matcha", Langs::default());
+        assert!(has_sokuon_seg(&alts, 't', "cha"));
+        // tcha -> っ|cha on its own
+        assert!(has_sokuon_seg(
+            &compile("tcha", Langs::default()),
+            't',
+            "cha"
+        ));
+    }
+
+    #[test]
+    fn sokuon_never_final_or_vowel_or_n() {
+        // a trailing consonant is the unfinished-segment rule, not a
+        // geminate; n doubling is the full syllable ん instead
+        for p in ["kit", "kitann"] {
+            for a in compile(p, Langs::default()) {
+                for s in &a.segments {
+                    let geminate = matches!(&s.matcher, SegMatcher::One(cs) if cs.contains('っ')
+                        && !cs.contains('た'));
+                    assert!(!geminate, "{p}: unexpected geminate segment {s:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sokuon_matches_geminate_text() {
+        let alts = compile("kitte", Langs::default());
+        let ms = crate::matcher::find_matches_vim_semantics(&["きってとキッテ"], &alts);
+        assert_eq!(ms.len(), 2, "{ms:?}");
+        assert_eq!((ms[0].col, ms[0].len), (0, 9)); // きって = 3 chars
+        assert_eq!((ms[1].col, ms[1].len), (12, 9)); // と = 3 bytes + キッテ
     }
 }
