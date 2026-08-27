@@ -195,6 +195,27 @@ fn bye_deregisters_immediately() {
 }
 
 #[test]
+fn unknown_cmd_replies_valid_json_then_closes() {
+    let server = start_server(300);
+    let mut stream = hello_stream(&server.socket, 4444);
+
+    // Raw line read: the reply is pinned byte-for-byte. serde_json's
+    // Map is a BTreeMap here (no preserve_order feature), so keys
+    // serialize alphabetically.
+    let mut reader = BufReader::new(stream.try_clone().unwrap());
+    stream.write_all(b"{\"cmd\":\"bogus\"}\n").unwrap();
+    stream.flush().unwrap();
+
+    let mut line = String::new();
+    reader.read_line(&mut line).unwrap();
+    assert_eq!(line.trim_end(), r#"{"cmd":"bogus","error":"unknown cmd"}"#);
+
+    // The connection is closed after the reply: EOF, not another line.
+    let mut more = String::new();
+    assert_eq!(reader.read_line(&mut more).unwrap(), 0);
+}
+
+#[test]
 fn unused_server_exits_after_grace() {
     let mut server = start_server(300);
     // no session ever opened: the grace period runs from startup
