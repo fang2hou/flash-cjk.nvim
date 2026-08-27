@@ -1,8 +1,11 @@
 //! Benchmarks mirroring the real workload: a ~60-line mixed CJK window
 //! re-matched on every keystroke as the pattern grows.
+//!
+//! Every series measures `find_matches_vim_semantics`, the production
+//! per-keystroke matcher (vim `searchpos` semantics) served by the binary.
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use flash_cjk_core::{Langs, compile, find_matches};
+use flash_cjk_core::{Langs, compile, find_matches_vim_semantics};
 
 fn bench_lines() -> Vec<String> {
     (1..=60)
@@ -25,11 +28,11 @@ fn bench_matching(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("full", pat), pat, |b, _| {
             b.iter(|| {
                 let alts = compile(pat, langs);
-                find_matches(std::hint::black_box(&lines), &alts)
+                find_matches_vim_semantics(std::hint::black_box(&lines), &alts)
             })
         });
         group.bench_with_input(BenchmarkId::new("match_only", pat), pat, |b, _| {
-            b.iter(|| find_matches(std::hint::black_box(&lines), &alts))
+            b.iter(|| find_matches_vim_semantics(std::hint::black_box(&lines), &alts))
         });
     }
     group.finish();
@@ -56,7 +59,7 @@ fn bench_scaling(c: &mut Criterion) {
         c.benchmark_group("scaling").bench_with_input(
             BenchmarkId::new("vim_semantics", size),
             &lines,
-            |b, ls| b.iter(|| find_matches(std::hint::black_box(ls), &alts)),
+            |b, ls| b.iter(|| find_matches_vim_semantics(std::hint::black_box(ls), &alts)),
         );
     }
 }
