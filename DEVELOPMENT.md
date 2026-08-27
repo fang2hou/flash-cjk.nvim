@@ -29,8 +29,9 @@ Do not substitute tools without explicit approval (see the guidelines repository
 
 ```bash
 mise run check              # rustfmt + clippy + stylua + lua typecheck + md/toml — what prek and CI run
-mise run test               # check + cargo test + lua suite + cross-validation
-mise run e2e                # LazyVim-style end-to-end repro (first run clones .deps/)
+mise run test               # check + release build + cargo test + lua suite + cross-validation
+mise run e2e                # check + test + LazyVim-style end-to-end repro (first run clones .deps/)
+mise run ci                 # full serial pipeline (what CI runs): check -> test -> e2e
 mise run codegen            # regenerate jp data (Unihan) + sync rust/data from json
 mise run format             # format rust, lua, markdown, toml in place
 cargo build --release --manifest-path rust/Cargo.toml   # native matcher binary for daily use

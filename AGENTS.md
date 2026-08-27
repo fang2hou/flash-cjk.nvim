@@ -11,8 +11,9 @@ pinyin/romaji/romanization — for people who work in CJK text without switching
 ```bash
 mise install                 # set up the toolchain (rust, neovim, uv, prek, cocogitto, taplo, oxfmt, stylua, lua-language-server)
 mise run check               # fast validation: rustfmt, clippy, stylua, lua typecheck, markdown/toml formatting — run before every commit
-mise run test                # check + cargo test + lua suite + rust/vim parity cross-validation
-mise run e2e                 # check + LazyVim-style end-to-end repro (clones .deps on first run)
+mise run test                # check + release build + cargo test + lua suite + rust/vim parity cross-validation
+mise run e2e                 # check + test + LazyVim-style end-to-end repro (clones .deps on first run)
+mise run ci                  # full serial pipeline (what CI runs): check -> test -> e2e
 mise run format              # format rust, lua, markdown, toml in place
 mise run codegen             # regenerate lang/ja/data.json from Unihan + sync rust data from json
 nvim --headless +"lua dofile('tests/run.lua')" +qa!                # lua suite alone
