@@ -44,19 +44,20 @@ local lines = {
 	"きって きった キッテ まっちゃ まっすぐ チェック コーヒー ケーキ コヒー った っちゃ っぽ っし",
 }
 
-local function vim_spans(pattern)
-	local regex = fc.mix_mode(pattern)
+local function vim_spans(p, ls)
+	local regex = fc.mix_mode(p)
 	local spans = {}
-	for li, line in ipairs(lines) do
+	for li, line in ipairs(ls) do
 		local col = 0
 		while true do
-			local s, e = vim.regex(regex):match_str(line:sub(col + 1))
-			if not s then
+			local s0, e0 = vim.regex(regex):match_str(line:sub(col + 1))
+			if not s0 then
 				break
 			end
-			spans[#spans + 1] = string.format("%d:%d+%d", li, col + s, e - s)
-			col = col + e
-			if e == s then
+			spans[#spans + 1] = string.format("%d:%d+%d", li, col + s0, e0 - s0)
+			col = col + e0
+			-- a scan must advance; `<=` also rejects an impossible end<start regression
+			if e0 <= s0 then
 				break
 			end
 		end
@@ -64,14 +65,16 @@ local function vim_spans(pattern)
 	return spans
 end
 
-local function rust_spans(pattern)
-	local resp = rust.search(pattern, lines, langs)
+-- returns the span list plus the raw matches and response: the fuzz phase
+-- reuses them for pred_langs attribution
+local function rust_spans(p, ls)
+	local resp = rust.search(p, ls, langs)
 	local found = (resp and resp.matches) or {}
 	local spans = {}
 	for _, m in ipairs(found) do
 		spans[#spans + 1] = string.format("%d:%d+%d", m[1] + 1, m[2], m[4])
 	end
-	return spans
+	return spans, found, resp
 end
 
 local patterns = {
@@ -129,8 +132,8 @@ local patterns = {
 -- the span sequences must be identical item by item.
 local fails = 0
 for _, p in ipairs(patterns) do
-	local vs = vim_spans(p)
-	local rs = rust_spans(p)
+	local vs = vim_spans(p, lines)
+	local rs = rust_spans(p, lines)
 	if #vs ~= #rs then
 		fails = fails + 1
 		print(string.format("COUNT MISMATCH %q: vim=%d rust=%d", p, #vs, #rs))
@@ -287,46 +290,12 @@ local function attr_key(t)
 	return table.concat(copy, ",")
 end
 
-local function vim_spans_for(p, ls)
-	local regex = fc.mix_mode(p)
-	local spans = {}
-	for li, line in ipairs(ls) do
-		local col = 0
-		while true do
-			local s0, e0 = vim.regex(regex):match_str(line:sub(col + 1))
-			if not s0 then
-				break
-			end
-			spans[#spans + 1] = string.format("%d:%d+%d", li, col + s0, e0 - s0)
-			col = col + e0
-			if e0 <= s0 then
-				break
-			end
-		end
-	end
-	return spans
-end
-
-local function rust_result_for(p, ls)
-	local resp = rust.search(p, ls, langs)
-	return (resp and resp.matches) or {}, resp
-end
-
-local function rust_spans_of(found)
-	local spans = {}
-	for _, m in ipairs(found) do
-		spans[#spans + 1] = string.format("%d:%d+%d", m[1] + 1, m[2], m[4])
-	end
-	return spans
-end
-
 local fuzz_fails = 0
 local attr_checked = 0
 for round = 1, 300 do
 	local ls, p = { rand_line(), rand_line(), rand_line() }, rand_pattern()
-	local vs = vim_spans_for(p, ls)
-	local found, resp = rust_result_for(p, ls)
-	local rs = rust_spans_of(found)
+	local vs = vim_spans(p, ls)
+	local rs, found, resp = rust_spans(p, ls)
 	if #vs ~= #rs then
 		fuzz_fails = fuzz_fails + 1
 		print(string.format("FUZZ COUNT round=%d pattern=%q vim=%d rust=%d", round, p, #vs, #rs))

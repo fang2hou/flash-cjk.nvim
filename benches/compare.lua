@@ -216,7 +216,6 @@ for _, lang_list in ipairs(CATEGORY_MATRIX) do
 	}
 end
 local CASES_TOTAL = CASES_PER_CATEGORY * #CATEGORIES
-local WARMUP_PASSES = 1
 local MEASURED_PASSES = 3
 
 local function gen_case(cat)

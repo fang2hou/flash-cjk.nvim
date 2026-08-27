@@ -1,4 +1,5 @@
 local lang = require("flash-cjk.lang")
+local match = require("flash-cjk.match")
 
 local M = {}
 M.__index = M
@@ -171,8 +172,7 @@ end
 ---@param matches Flash.Match[] filter() output
 ---@return Flash.Match[] matches ordered for label issuance
 function M:sort_by_priority(matches)
-	local clean, forced =
-		require("flash-cjk.match").parse_filter(self.state.pattern.pattern, self.filter_keys)
+	local clean, forced = match.parse_filter(self.state.pattern.pattern, self.filter_keys)
 	if forced then
 		return matches
 	end
@@ -208,8 +208,7 @@ end
 ---@param labels string[]
 ---@return string[] labels without every predicted next letter of any match
 function M:skip(win, labels)
-	local prefix, forced =
-		require("flash-cjk.match").parse_filter(self.state.pattern.pattern, self.filter_keys)
+	local prefix, forced = match.parse_filter(self.state.pattern.pattern, self.filter_keys)
 	local prefix_len = string.len(prefix)
 	local langs = self.langs
 	if forced then

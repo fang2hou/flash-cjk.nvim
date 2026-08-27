@@ -301,8 +301,12 @@ fn conn_loop(
             }
             Some(other) => {
                 shared.log(&format!("conn {id}: unknown cmd {other}"));
-                let msg = serde_json::to_string(other).unwrap_or_else(|_| "\"?\"".into());
-                writeln!(writer, "{{\"error\":\"unknown cmd\":{msg}}}")?;
+                writeln!(
+                    writer,
+                    "{}",
+                    serde_json::json!({"error": "unknown cmd", "cmd": other})
+                )?;
+                writer.flush().ok();
                 break;
             }
             None => {

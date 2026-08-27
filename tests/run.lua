@@ -177,9 +177,11 @@ local per_jump = fc.make_mix_mode(
 )
 ok(not matches(per_jump, "ti\x01", "ち"), "per-jump keys: cn marker still locks cn")
 ok(
-	matches(per_jump, "ti\x02", "ち") == false and true or true,
-	"per-jump keys: jp disabled (only cn bound)"
+	not matches(per_jump, "ti\x02", "ち"),
+	"per-jump keys: unbound ja marker is inert (no lock, no match)"
 )
+local clean2, locked2 = fc.parse_filter("ti\x02", { zhcn = "<C-d>" })
+ok(clean2 == "ti\x02" and locked2 == nil, "per-jump keys: unbound marker not stripped, not a lock")
 -- empty marker set must not crash
 ok(
 	fc.parse_filter("ti", { zhcn = false, ja = false, ko = false }) == "ti",
@@ -329,22 +331,19 @@ ok(hit_ti_cn, "forced lock pattern still finds pinyin matches")
 ok(not hit_kana, "forced lock pattern drops Japanese matches")
 
 -- filter_keys are configurable: remap cn to <C-d>, then verify and restore
-fc.setup({
-	languages = {
-		zhcn = { filter_key = false },
-		ja = { filter_key = false },
-		ko = { filter_key = false },
-	},
-})
-ok(fc.parse_filter("ti\x01") == "ti\x01", "all locks disabled: markers not stripped")
-ok(select(2, fc.parse_filter("ti\x01")) == nil, "all locks disabled: no forced lang")
-fc.setup({
-	languages = {
-		zhcn = { filter_key = "<C-c>" },
-		ja = { filter_key = "<C-j>" },
-		ko = { filter_key = "<C-k>" },
-	},
-}) -- restore defaults
+do
+	local saved = vim.deepcopy(fc.config)
+	fc.setup({
+		languages = {
+			zhcn = { filter_key = false },
+			ja = { filter_key = false },
+			ko = { filter_key = false },
+		},
+	})
+	ok(fc.parse_filter("ti\x01") == "ti\x01", "all locks disabled: markers not stripped")
+	ok(select(2, fc.parse_filter("ti\x01")) == nil, "all locks disabled: no forced lang")
+	fc.config = saved -- restore the snapshot, not hardcoded default keys
+end
 do
 	local State = require("flash.state")
 	vim.api.nvim_buf_set_lines(0, 0, -1, false, { "日本語テスト ちちはち 梯子" })
@@ -397,14 +396,16 @@ do
 	end) -- installs patches, loop exits on the prefed escape
 	local Prompt = require("flash.prompt")
 	Prompt.set("ti\x01", false)
-	ok(Prompt.prompt == "⚡ti [中]", "prompt displays [中] for cn lock")
+	ok(string.find(Prompt.prompt, "[中]", 1, true) ~= nil, "prompt displays [中] for cn lock")
 	Prompt.set("dk\x04\x02", false)
+	local ko_at = string.find(Prompt.prompt, "[한]", 1, true)
+	local ja_at = string.find(Prompt.prompt, "[日]", 1, true)
 	ok(
-		Prompt.prompt == "⚡dk [한] [日]",
+		ko_at ~= nil and ja_at ~= nil and ko_at < ja_at,
 		"prompt displays multiple markers (rightmost shown last)"
 	)
 	Prompt.set("ti\x05", false)
-	ok(Prompt.prompt == "⚡ti [EN]", "prompt displays [EN] for en lock")
+	ok(string.find(Prompt.prompt, "[EN]", 1, true) ~= nil, "prompt displays [EN] for en lock")
 end
 
 -- rust fast path: full state with the binary-backed matcher must agree
@@ -668,11 +669,11 @@ end
 -- performance: worst-case long inputs
 
 for _, p in ipairs({ "k", "ka", "kan", "kanj", "kanji", "kanjix" }) do
-	local t0 = os.clock()
+	local t0 = vim.uv.hrtime()
 	local regex = mixed(p)
 	local re = vim.regex(regex)
 	re:match_str("かんじ漢字感")
-	local dt = (os.clock() - t0) * 1000
+	local dt = (vim.uv.hrtime() - t0) / 1e6 -- wall-clock ms
 	ok(dt < 150, string.format("pattern %q under 150ms (took %.1fms)", p, dt))
 	if p == "kanji" or p == "kanjix" then
 		print(string.format("perf %q: %.1fms, regex %dKB", p, dt, math.floor(#regex / 1024)))

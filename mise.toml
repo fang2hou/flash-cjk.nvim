@@ -52,18 +52,23 @@ taplo format $(git ls-files '*.toml')
 """
 
 [tasks.test]
-description = "rust unit tests + lua suites (runs check first)"
+description = "build release matcher, rust unit tests + lua suites incl. rust/vim parity (runs check first)"
 depends = ["check"]
 run = """
+cargo build --release --manifest-path rust/Cargo.toml --quiet
 cargo test --manifest-path rust/Cargo.toml --quiet
 nvim --headless +"lua dofile('tests/run.lua')" +qa!
 nvim --headless -l tests/cross_validate_rust.lua
 """
 
 [tasks.e2e]
-description = "LazyVim-style end-to-end repro incl. rust/vim parity (runs check first)"
-depends = ["check"]
+description = "LazyVim-style end-to-end repro incl. rust/vim parity (runs check+test first)"
+depends = ["test"]
 run = "tests/e2e/run.sh"
+
+[tasks.ci]
+description = "full pipeline: check, then tests, then e2e — strictly serial"
+depends = ["e2e"]
 
 [tasks.codegen]
 description = "regenerate jp readings from Unihan, then sync rust data from json"
