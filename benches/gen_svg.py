@@ -256,9 +256,9 @@ def main() -> None:
     log_hi = math.log10(max(all_means) * 1.15)
     ticks = [t for t in (0.1, 1.0, 10.0)
              if log_lo <= math.log10(t) <= log_hi]
-    # right rail: values align in a gutter past the bar zone so labels
-    # never sit on a bar tip
-    GUTTER = 118
+    # gutter past the bar zone: tip-following value labels of the
+    # longest bars land here, never outside the card
+    GUTTER = 124
 
     def bar_w(ms: float, zone: float) -> float:
         frac = (math.log10(ms) - log_lo) / (log_hi - log_lo)
@@ -267,12 +267,16 @@ def main() -> None:
     y = ly + 20
     for size, cats in groups:
         n_rows = len(cats)
-        zone_h = n_rows * 63 - 7
-        # header = title row 16 + rule row 16 + tick row 16 + gap 4;
-        # header = title row 16 + rule/tick band 16 + gap 4 past
-        # CARD_PAD_TOP; card_h accounts for it so rows never cross
+        # per-category pitch is 70px from one label baseline to the
+        # next: 12 to its first bar, two 20px bar slots, 18 of clearance
+        # before the next label -- the label stays visually closer to
+        # its own bars than to the row above. The last category has no
+        # trailing clearance, hence the -18.
+        zone_h = n_rows * 70 - 18
+        # header: title row 16 + rule/tick band 16 + 6 gap, measured
+        # past CARD_PAD_TOP; card_h accounts for it so rows never cross
         # the border
-        HEADER_H = 36
+        HEADER_H = 38
         card_h = CARD_PAD_TOP + HEADER_H + zone_h + 12
         parts.append(rounded(LEFT, y, BODY, card_h, 14, CARD,
                              stroke=HAIRLINE))
@@ -302,7 +306,7 @@ def main() -> None:
             )
             parts.append(text(gx + 4, iy - 8, f"{fmt_ms(t)} ms", 8.5,
                               MUTED))
-        iy += 4  # breathing room between the tick row and first category
+        iy += 6  # breathing room between the tick row and first category
         for _, cat in cats:
             vim_ms = cat["vim_ms"]["mean"]
             rust_ms = cat["rust_server_ms"]["mean"]
@@ -314,20 +318,23 @@ def main() -> None:
                 text(RIGHT - CARD_PAD_X, iy, fmt_x(ratio), 12, ratio_color,
                      700, "end")
             )
-            iy += 16
+            iy += 12  # label sits close to ITS bars, not the previous row
             for ms, color, name in (
                 (vim_ms, VIM_COLOR, "vim-regex"),
                 (rust_ms, RUST_COLOR, "Rust (server)"),
             ):
                 parts.append(rounded(bx, iy, zone, 14, 7, TRACK))
                 parts.append(rounded(bx, iy, bar_w(ms, zone), 14, 7, color))
+                # value follows the bar tip: proximity beats column
+                # alignment on a log scale, and the gutter absorbs the
+                # longest bar's label
                 parts.append(
-                    text(RIGHT - CARD_PAD_X, iy + 11,
-                         f"{name}  {fmt_ms(ms)} ms", 10.5, INK, 700, "end")
+                    text(bx + bar_w(ms, zone) + 8, iy + 11,
+                         f"{name}  {fmt_ms(ms)} ms", 10.5, INK, 700)
                 )
                 iy += 20
-            iy += 7
-        y += card_h + 14
+            iy += 18
+        y += card_h + 20
     # --------------------------------------------------------------- footnote
     fy = y + 2
     parts.append(hline(LEFT, RIGHT, fy, HAIRLINE))
