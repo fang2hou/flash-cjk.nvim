@@ -177,9 +177,11 @@ local per_jump = fc.make_mix_mode(
 )
 ok(not matches(per_jump, "ti\x01", "ち"), "per-jump keys: cn marker still locks cn")
 ok(
-	matches(per_jump, "ti\x02", "ち") == false and true or true,
-	"per-jump keys: jp disabled (only cn bound)"
+	not matches(per_jump, "ti\x02", "ち"),
+	"per-jump keys: unbound ja marker is inert (no lock, no match)"
 )
+local clean2, locked2 = fc.parse_filter("ti\x02", { zhcn = "<C-d>" })
+ok(clean2 == "ti\x02" and locked2 == nil, "per-jump keys: unbound marker not stripped, not a lock")
 -- empty marker set must not crash
 ok(
 	fc.parse_filter("ti", { zhcn = false, ja = false, ko = false }) == "ti",
