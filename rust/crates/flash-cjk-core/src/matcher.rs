@@ -51,16 +51,16 @@ pub fn find_matches_vim_semantics(lines: &[&str], alts: &[Alt]) -> Vec<Match> {
         while b < k_len {
             let mut advanced = false;
             for alt in alts {
-                let segments: Vec<&crate::parser::Segment> = alt.segments.iter().collect();
-                if segments.is_empty() {
+                let mut segments = alt.segments.iter();
+                let Some(first) = segments.next() else {
                     continue;
-                }
-                let sets = seg_sets(segments[0]);
+                };
+                let sets = seg_sets(first);
                 let Some(mut k) = seg_matches_at(sets, &chars, b) else {
                     continue;
                 };
                 let mut ok = true;
-                for seg in &segments[1..] {
+                for seg in segments {
                     match seg_matches_at(seg_sets(seg), &chars, k) {
                         Some(nk) => k = nk,
                         None => {
