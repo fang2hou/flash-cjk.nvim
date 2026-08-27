@@ -113,8 +113,6 @@ local patterns = {
 	"t-",
 	"kitte",
 	"kitta",
-	"kit",
-	"kik",
 	"matcha",
 	"massugu",
 	"chekku",
