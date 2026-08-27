@@ -70,6 +70,35 @@ local function extend(prefix, str, seg_type)
 	return seg
 end
 
+-- Complete romaji syllables that stand alone mid-pattern (vowels + n);
+-- also excluded from geminate-consonant detection. Set lookup replaces
+-- a per-call table literal plus linear scan on the parser hot path.
+local VOWEL_N = { a = true, e = true, i = true, o = true, u = true, n = true }
+
+-- ASCII class checks: the parser only classifies single-byte input keys,
+-- so raw byte ranges match %l / %a exactly (C locale) without the pattern
+-- machinery. string.byte("") is nil, preserving the falsy result %a gives
+-- on the empty tail.
+local function is_lower(c)
+	local b = string.byte(c)
+	return b ~= nil and b >= 97 and b <= 122
+end
+
+local function is_alpha(c)
+	local b = string.byte(c)
+	return b ~= nil and ((b >= 65 and b <= 90) or (b >= 97 and b <= 122))
+end
+
+-- Key set for O(1) membership in a punctuation map; built once per parse
+-- instead of once per recursion node.
+local function key_set(map)
+	local set = {}
+	for key in pairs(map) do
+		set[key] = true
+	end
+	return set
+end
+
 local function make_nodes(comma)
 	return {
 		alpha = function(str)
@@ -100,8 +129,7 @@ local function make_nodes(comma)
 	}
 end
 
-local function regex(segments, comma)
-	local nodes = make_nodes(comma)
+local function regex(segments, nodes)
 	local fragments = {}
 	for _, seg in ipairs(segments) do
 		fragments[#fragments + 1] = nodes[seg.type](seg.str)
@@ -117,13 +145,14 @@ end
 -- punctuation key (comma) or any other character.
 ---@param str string
 ---@param prefix table? partial segmentation
----@param ctx {count: integer, langs: table<string,boolean>, comma: table<string,string>}
+---@param ctx {count: integer, langs: table<string,boolean>, comma: table<string,string>, comma_set: table<string,boolean>}
 ---@return table
 local function parser(str, prefix, ctx)
 	prefix = prefix or {}
 	if ctx == nil then
 		local flags = config.lang_flags()
-		ctx = { count = 0, langs = flags, comma = comma_map(flags) }
+		local comma = comma_map(flags)
+		ctx = { count = 0, langs = flags, comma = comma, comma_set = key_set(comma) }
 	end
 	if ctx.count >= MAX_SEGMENTATIONS then
 		return {}
@@ -131,10 +160,6 @@ local function parser(str, prefix, ctx)
 	local firstchar = string.sub(str, 1, 1)
 	local secondchar = string.sub(str, 2, 2)
 	local thirdchar = string.sub(str, 3, 3)
-	local comma_keys = {}
-	for key in pairs(ctx.comma) do
-		table.insert(comma_keys, key)
-	end
 	-- Literal letters may follow a language segment only under
 	-- mixed_input; prefix._alpha tracks whether the chain is still
 	-- purely literal (nil = no language segment yet).
@@ -142,7 +167,7 @@ local function parser(str, prefix, ctx)
 	if firstchar == "" then
 		ctx.count = ctx.count + 1
 		return { prefix }
-	elseif string.match(firstchar, "%l") then
+	elseif is_lower(firstchar) then
 		local results = {}
 		if secondchar == "" then
 			if literal_ok then
@@ -159,7 +184,7 @@ local function parser(str, prefix, ctx)
 				results = append_all(results, parser("", extend(prefix, firstchar, "ko"), ctx))
 			end
 			return results
-		elseif string.match(secondchar, "%a") then
+		elseif is_alpha(secondchar) then
 			-- longest / most specific segments first: when the
 			-- segmentation budget runs out on long inputs, the
 			-- informative branches (pinyin, romaji) survive instead of
@@ -173,7 +198,7 @@ local function parser(str, prefix, ctx)
 				local ja_engine = lang.get("ja")
 				local two = firstchar .. secondchar
 				local three = two .. thirdchar
-				if string.match(thirdchar, "%a") and ja_engine.pattern(three) then
+				if is_alpha(thirdchar) and ja_engine.pattern(three) then
 					local seg = extend(prefix, three, "jp")
 					seg._alpha = false
 					results = append_all(results, parser(string.sub(str, 4), seg, ctx))
@@ -188,8 +213,7 @@ local function parser(str, prefix, ctx)
 				-- segments as a single letter mid-pattern. Tried before the
 				-- vowel/n singles: the triggers are disjoint, and the Rust
 				-- parser mirrors this exact alternation order.
-				local doubled = secondchar == firstchar
-					and not vim.list_contains({ "a", "e", "i", "o", "u", "n" }, firstchar)
+				local doubled = secondchar == firstchar and not VOWEL_N[firstchar]
 				local tch = firstchar == "t" and secondchar == "c" and thirdchar == "h"
 				if doubled or tch then
 					local seg = extend(prefix, firstchar, "sokuon")
@@ -200,10 +224,7 @@ local function parser(str, prefix, ctx)
 				-- that are complete syllables on their own (vowels + n);
 				-- consonant prefixes are always typed to completion, so
 				-- they only matter as the last, unfinished segment.
-				if
-					vim.list_contains({ "a", "e", "i", "o", "u", "n" }, firstchar)
-					and ja_engine.pattern(firstchar)
-				then
+				if VOWEL_N[firstchar] and ja_engine.pattern(firstchar) then
 					local seg = extend(prefix, firstchar, "jp")
 					seg._alpha = false
 					results = append_all(results, parser(string.sub(str, 2), seg, ctx))
@@ -237,7 +258,7 @@ local function parser(str, prefix, ctx)
 				)
 			end
 			return results
-		elseif literal_ok and vim.list_contains(comma_keys, secondchar) then
+		elseif literal_ok and ctx.comma_set[secondchar] then
 			prefix[#prefix + 1] = { str = firstchar, type = "alpha" }
 			prefix[#prefix + 1] = { str = secondchar, type = "comma" }
 			return parser(string.sub(str, 3), prefix, ctx)
@@ -248,7 +269,7 @@ local function parser(str, prefix, ctx)
 		else
 			return {}
 		end
-	elseif vim.list_contains(comma_keys, firstchar) then
+	elseif ctx.comma_set[firstchar] then
 		prefix[#prefix + 1] = { str = firstchar, type = "comma" }
 		return parser(string.sub(str, 2), prefix, ctx)
 	else
@@ -323,6 +344,11 @@ end
 ---@return fun(pattern: string): string, string
 function M.make_mix_mode(langs, filter_keys)
 	local comma = comma_map(langs)
+	local comma_set = key_set(comma)
+	-- Node closures read only the comma map, so one node table serves
+	-- every unlocked call and each locked variant caches its own.
+	local nodes = make_nodes(comma)
+	local locked_nodes = {}
 	local markers = filter_keys ~= nil and markers_from_config(filter_keys) or nil
 	return function(str)
 		local clean, locked
@@ -331,12 +357,23 @@ function M.make_mix_mode(langs, filter_keys)
 		else
 			clean, locked = M.parse_filter(str)
 		end
-		local eff_langs, eff_comma = langs, comma
+		local eff_langs, eff_comma, eff_set = langs, comma, comma_set
+		local seg_nodes = nodes
 		if locked then
 			eff_langs = locked_langs(langs, locked)
 			eff_comma = comma_map(eff_langs)
+			eff_set = key_set(eff_comma)
+			seg_nodes = locked_nodes[locked]
+			if seg_nodes == nil then
+				seg_nodes = make_nodes(eff_comma)
+				locked_nodes[locked] = seg_nodes
+			end
 		end
-		local all = parser(clean, nil, { count = 0, langs = eff_langs, comma = eff_comma })
+		local all = parser(
+			clean,
+			nil,
+			{ count = 0, langs = eff_langs, comma = eff_comma, comma_set = eff_set }
+		)
 		if #all == 0 then
 			-- no interpretation at all (e.g. en disabled and no reading
 			-- matches): match the literal input
@@ -346,7 +383,7 @@ function M.make_mix_mode(langs, filter_keys)
 		local alternatives = { [[\(]] }
 		local seen = {}
 		for _, seg in ipairs(all) do
-			local r = regex(seg, eff_comma)
+			local r = regex(seg, seg_nodes)
 			if not seen[r] then
 				seen[r] = true
 				alternatives[#alternatives + 1] = r
