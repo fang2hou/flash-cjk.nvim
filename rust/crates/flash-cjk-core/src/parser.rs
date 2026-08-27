@@ -225,8 +225,10 @@ impl<'a> Compiler<'a> {
                 let two: String = [first, second].iter().collect();
                 let three: String = [first, second, third].iter().collect();
                 // zhcn xiaohe double-pinyin (2 keys)
-                if self.langs.zhcn && self.d.cn_char2.contains_key(two.as_str()) {
-                    let cs = self.d.cn_char2[two.as_str()].clone();
+                if self.langs.zhcn
+                    && let Some(cs) = self.d.cn_char2.get(two.as_str())
+                {
+                    let cs = cs.clone();
                     let mut s = segs.clone();
                     s.push(Segment {
                         input: two.clone(),
@@ -261,8 +263,10 @@ impl<'a> Compiler<'a> {
                     }
                 }
                 // ja 2-letter
-                if self.langs.ja && self.d.jp_p2.contains_key(two.as_str()) {
-                    let cs = self.d.jp_p2[two.as_str()].clone();
+                if self.langs.ja
+                    && let Some(cs) = self.d.jp_p2.get(two.as_str())
+                {
+                    let cs = cs.clone();
                     let mut s = segs.clone();
                     s.push(Segment {
                         input: two.clone(),
@@ -291,9 +295,9 @@ impl<'a> Compiler<'a> {
                 // ja 1-letter mid-pattern: vowels + n only
                 if self.langs.ja
                     && matches!(first, 'a' | 'e' | 'i' | 'o' | 'u' | 'n')
-                    && self.d.jp_p1.contains_key(f2.as_str())
+                    && let Some(cs) = self.d.jp_p1.get(f2.as_str())
                 {
-                    let cs = self.d.jp_p1[f2.as_str()].clone();
+                    let cs = cs.clone();
                     let mut s = segs.clone();
                     s.push(Segment {
                         input: first.to_string(),
@@ -328,8 +332,10 @@ impl<'a> Compiler<'a> {
                             self.parse(tail, s, false);
                         }
                     }
-                    if jp_vowel(first) && self.d.ko.contains_key(f3.as_str()) {
-                        let cs = self.d.ko[f3.as_str()].clone();
+                    if jp_vowel(first)
+                        && let Some(cs) = self.d.ko.get(f3.as_str())
+                    {
+                        let cs = cs.clone();
                         let mut s = segs.clone();
                         s.push(Segment {
                             input: first.to_string(),
@@ -364,12 +370,6 @@ impl<'a> Compiler<'a> {
                 self.parse(tail3, segs, alpha_ok);
             } else if alpha_allowed {
                 // alpha + other literal
-                let esc = if second == '\\' {
-                    "\\\\"
-                } else {
-                    &second.to_string()
-                };
-                let _ = esc; // Lua escapes for the regex; here the raw char is matched
                 segs.push(Segment {
                     input: first.to_string(),
                     matcher: SegMatcher::One(CharSet::single_ci(first)),
