@@ -66,6 +66,10 @@ description = "LazyVim-style end-to-end repro incl. rust/vim parity (runs check 
 depends = ["check"]
 run = "tests/e2e/run.sh"
 
+[tasks.ci]
+description = "full pipeline: check once, then tests, then e2e"
+depends = ["check", "test", "e2e"]
+
 [tasks.codegen]
 description = "regenerate jp readings from Unihan, then sync rust data from json"
 run = """
