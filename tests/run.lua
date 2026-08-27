@@ -85,6 +85,8 @@ ok(matches(mixed, "kitte", "きって"), "kitte matches きって (geminate kk)"
 ok(matches(mixed, "kitte", "キッテ"), "kitte matches キッテ (katakana geminate)")
 ok(matches(mixed, "kitta", "切った"), "kitta matches 切った (kanji + geminate)")
 ok(matches(mixed, "kitta", "きった"), "kitta matches きった")
+ok(matches(mixed, "kit", "切っ"), "kit matches 切っ (trailing onset anticipates geminate)")
+ok(matches(mixed, "kik", "きっ"), "kik matches きっ (any consonant anticipates geminate)")
 ok(matches(mixed, "matcha", "まっちゃ"), "matcha matches まっちゃ (t before ch)")
 ok(matches(mixed, "massugu", "まっすぐ"), "massugu matches まっすぐ (geminate ss)")
 ok(matches(mixed, "chekku", "チェック"), "chekku matches チェック (youon + geminate)")

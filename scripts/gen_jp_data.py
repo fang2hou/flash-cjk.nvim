@@ -17,7 +17,9 @@ The generated tables drive two independent lookups:
     at once (youon combos like しゃ = "sha"; small-e loanwords like
     ちぇ = "che"). The five single-vowel p1 classes also contain ー
     so a bare vowel segment matches the long-vowel mark
-    (ko|o|hi|i -> コーヒー).
+    (ko|o|hi|i -> コーヒー), and the consonant classes contain っ/ッ so
+    a trailing incomplete onset anticipates a geminate (ki|t of
+    "kitte" matches 切っ).
   - readings: character -> romaji variants, used by the labeler to
     predict the next likely input letter of a match.
 
@@ -47,6 +49,11 @@ MAX_VARIANTS_PER_READING = 8
 # Chōonpu: joins exactly the five single-vowel p1 classes so a bare
 # 1-letter vowel segment also matches ー (ko|o|hi|i -> コーヒー).
 CHOUONPU = "ー"
+
+# Sokuon: joins every consonant p1 class except n so a trailing
+# incomplete onset also matches the geminate mark (ki|t of "kitte"
+# highlights 切っ before the second t arrives).
+SOKUON = frozenset({"っ", "ッ"})
 
 # Japanese punctuation map (self-contained: ASCII + Japanese marks;
 # 。 is shared with Chinese)
@@ -325,12 +332,20 @@ def build_tables(readings, singles, combos) -> dict:
         parts.extend(sorted(combos.get(key, set())))
         p3[key] = parts[0] if len(parts) == 1 else "\\(" + "\\|".join(parts) + "\\)"
 
-    # Chōonpu extends the previous vowel, so only the five single-vowel
-    # classes gain it; p2/p3/readings stay unchanged.
-    p1 = {
-        k: char_class(v | {CHOUONPU} if k in "aiueo" else v)
-        for k, v in singles[1].items()
-    }
+    # Chōonpu extends the previous vowel, so the five single-vowel
+    # classes gain it (ko|o|hi|i -> コーヒー). The sokuon joins every
+    # consonant class except n: a trailing onset letter is an
+    # incomplete syllable that may yet double, so "kit" already
+    # highlights 切っ while the user types toward "kitte" — mirroring
+    # the parser's mid-pattern geminate trigger (n never geminates:
+    # nn is the full syllable ん). p2/p3/readings stay unchanged.
+    def p1_extras(key: str) -> set[str]:
+        if key in "aiueo":
+            return {CHOUONPU}
+        if key != "n":
+            return set(SOKUON)
+        return set()
+    p1 = {k: char_class(v | p1_extras(k)) for k, v in singles[1].items()}
     return {
         "readings": readings,
         "p1": p1,
