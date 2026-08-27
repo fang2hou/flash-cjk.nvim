@@ -45,8 +45,12 @@ cargo build --release --manifest-path rust/Cargo.toml   # native matcher binary 
 2. Implement the smallest coherent change
 3. `mise run check` must pass; matcher/labeler changes additionally need
    `mise run test` (parity suite)
-4. Commit with Conventional Commits (validated by Cocogitto)
-5. Open a PR following [CONTRIBUTING.md](./CONTRIBUTING.md)
+4. Changes that affect matching performance (either path) must refresh the
+   committed benchmark artifacts in the same PR: `nvim -l benches/compare.lua`
+   after a release build, then `uv run benches/gen_svg.py`, then update the
+   performance tables in all four READMEs from the new `benches/results.json`
+5. Commit with Conventional Commits (validated by Cocogitto)
+6. Open a PR following [CONTRIBUTING.md](./CONTRIBUTING.md)
 
 ## Layout
 

@@ -134,11 +134,11 @@ flash-cjk.nvim has two matching paths: Neovim / Vim regex matching and an option
 
 |                      | vim-regex |        Rust |        Speedup |
 | -------------------: | --------: | ----------: | -------------: |
-|      Overall average |   8.23 ms | **0.97 ms** |           8.5× |
-|          Overall p95 |   29.1 ms | **4.35 ms** |           6.7× |
-| Some heavy scenarios |           |             | **up to ~27×** |
+|      Overall average |   9.04 ms | **0.40 ms** |          22.5× |
+|          Overall p95 |   33.1 ms | **1.56 ms** |          21.3× |
+| Some heavy scenarios |           |             | **up to ~53×** |
 
-In the most demanding vim-regex scenarios, some three-language combinations average close to 30 ms, with p95 reaching 243 ms. The Rust matcher is primarily intended to reduce input latency in these extreme cases.
+In the most demanding vim-regex scenarios, `ja`-containing combinations average over 30 ms per keystroke, with p95 reaching 276 ms. The Rust matcher is primarily intended to reduce input latency in these extreme cases.
 
 ### Rust resident server
 
@@ -161,37 +161,37 @@ The benchmark covers four languages: `zhcn` (Simplified Chinese), `ja` (Japanese
 
 | Window mix | vim-regex mean | Rust server | Ratio | vim-regex p95 | server p95 |
 | ---------- | -------------: | ----------: | ----: | ------------: | ---------: |
-| `ja`       |        1.22 ms |     0.16 ms |  7.8× |        4.6 ms |    0.40 ms |
-| `zhcn`     |        0.20 ms |     0.09 ms |  2.2× |        0.5 ms |    0.14 ms |
-| `en`       |        0.08 ms |     0.11 ms | 0.75× |        0.1 ms |    0.14 ms |
-| `ko`       |        0.08 ms |     0.10 ms | 0.81× |        0.2 ms |    0.16 ms |
+| `ja`       |        1.04 ms |     0.15 ms |  7.2× |        4.4 ms |    0.41 ms |
+| `zhcn`     |        0.21 ms |     0.09 ms |  2.4× |        0.5 ms |    0.12 ms |
+| `ko`       |        0.08 ms |     0.08 ms |  1.0× |        0.2 ms |    0.11 ms |
+| `en`       |        0.07 ms |     0.09 ms |  0.8× |        0.1 ms |    0.13 ms |
 
 ### Two languages
 
 | Window mix    | vim-regex mean | Rust server | Ratio | vim-regex p95 | server p95 |
 | ------------- | -------------: | ----------: | ----: | ------------: | ---------: |
-| `ja` + `en`   |       29.99 ms |     1.35 ms | 22.2× |      134.1 ms |    5.00 ms |
-| `ko` + `en`   |        4.94 ms |     2.13 ms |  2.3× |       35.2 ms |   16.60 ms |
-| `zhcn` + `en` |        4.43 ms |     1.23 ms |  3.6× |       44.8 ms |   11.94 ms |
-| `ja` + `ko`   |        1.49 ms |     0.18 ms |  8.2× |        4.4 ms |    0.50 ms |
-| `zhcn` + `ja` |        1.04 ms |     0.16 ms |  6.4× |        3.6 ms |    0.34 ms |
-| `zhcn` + `ko` |        0.24 ms |     0.13 ms |  1.8× |        0.6 ms |    0.25 ms |
+| `ja` + `en`   |       32.66 ms |     0.62 ms | 52.9× |      144.2 ms |    2.06 ms |
+| `ko` + `en`   |        4.88 ms |     0.76 ms |  6.4× |       35.4 ms |    4.45 ms |
+| `zhcn` + `en` |        4.44 ms |     0.41 ms | 11.0× |       44.3 ms |    3.32 ms |
+| `ja` + `ko`   |        1.55 ms |     0.15 ms | 10.2× |        5.2 ms |    0.32 ms |
+| `zhcn` + `ja` |        1.17 ms |     0.16 ms |  7.2× |        6.5 ms |    0.36 ms |
+| `zhcn` + `ko` |        0.26 ms |     0.10 ms |  2.5× |        0.6 ms |    0.16 ms |
 
 ### Three languages
 
 | Window mix           | vim-regex mean | Rust server | Ratio | vim-regex p95 | server p95 |
 | -------------------- | -------------: | ----------: | ----: | ------------: | ---------: |
-| `zhcn` + `ja` + `en` |       29.12 ms |     2.43 ms | 12.0× |      243.4 ms |   14.79 ms |
-| `ja` + `ko` + `en`   |       19.48 ms |     2.10 ms |  9.3× |      129.7 ms |   15.47 ms |
-| `zhcn` + `ja` + `ko` |        9.07 ms |     0.67 ms | 13.6× |       47.5 ms |    2.40 ms |
-| `zhcn` + `ko` + `en` |        5.80 ms |     1.83 ms |  3.2× |       32.9 ms |   10.88 ms |
+| `zhcn` + `ja` + `en` |       32.18 ms |     0.98 ms | 32.8× |      276.1 ms |    4.81 ms |
+| `ja` + `ko` + `en`   |       22.53 ms |     0.81 ms | 28.0× |      144.5 ms |    4.71 ms |
+| `zhcn` + `ja` + `ko` |       10.05 ms |     0.36 ms | 28.0× |       50.4 ms |    1.09 ms |
+| `zhcn` + `ko` + `en` |        5.89 ms |     0.57 ms | 10.3× |       36.0 ms |    2.69 ms |
 
 ### Four languages
 
-| Window mix                  | vim-regex mean | Rust server |    Ratio | vim-regex p95 |  server p95 |
-| --------------------------- | -------------: | ----------: | -------: | ------------: | ----------: |
-| `zhcn` + `ja` + `ko` + `en` |       16.26 ms |     1.90 ms |     8.6× |       95.0 ms |    14.04 ms |
-| **Overall (1,050 windows)** |    **8.23 ms** | **0.97 ms** | **8.5×** |   **29.1 ms** | **4.35 ms** |
+| Window mix                  | vim-regex mean | Rust server |     Ratio | vim-regex p95 |  server p95 |
+| --------------------------- | -------------: | ----------: | --------: | ------------: | ----------: |
+| `zhcn` + `ja` + `ko` + `en` |       18.67 ms |     0.71 ms |     26.2× |      100.8 ms |     4.30 ms |
+| **Overall (1,050 windows)** |    **9.04 ms** | **0.40 ms** | **22.5×** |   **33.1 ms** | **1.56 ms** |
 
 </details>
 
