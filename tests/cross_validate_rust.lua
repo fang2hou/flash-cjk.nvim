@@ -41,6 +41,7 @@ local lines = {
 	"にほんご 日本語 대 한 中",
 	"句读测试。全角，句号『引号』、顿号!感叹?dashーーend",
 	"dict.key value,foo-bar [bracket] 'quote' \"dbl\" 5%",
+	"きって きった キッテ まっちゃ まっすぐ チェック コーヒー ケーキ コヒー った っちゃ っぽ っし",
 }
 
 local function vim_spans(pattern)
@@ -110,6 +111,18 @@ local patterns = {
 	"ho.",
 	"dk,",
 	"t-",
+	"kitte",
+	"kitta",
+	"matcha",
+	"massugu",
+	"chekku",
+	"koohii",
+	"keeki",
+	"kohi-",
+	"tta",
+	"tcha",
+	"ppo",
+	"sshi",
 }
 
 -- Strict comparison: both sides scan left-to-right non-overlapping, so

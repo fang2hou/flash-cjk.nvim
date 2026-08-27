@@ -33,6 +33,13 @@ local SMALL_Y = {
 	["ョ"] = "o",
 }
 
+-- Small e-kana (foreign-sound youon second half): し+ぇ -> she,
+-- ち+ぇ -> che, じ+ぇ -> je.
+local SMALL_E = {
+	["ぇ"] = "e",
+	["ェ"] = "e",
+}
+
 -- Mirrors merge_youon() in the generator: き+ゃ -> kya, し+ゃ -> sha.
 local function youon_merged(base, vowel)
 	if base == "shi" or base == "chi" or base == "ji" then
@@ -41,8 +48,58 @@ local function youon_merged(base, vowel)
 	return string.sub(base, 1, -2) .. "y" .. vowel
 end
 
+---Readings of the kana at byte `i`, folding a following small y/e-kana
+---into i-ending readings (き+ゃ -> kya, し+ぇ -> she). Unknown chars
+---return nil.
+---@param text string
+---@param i integer byte index
+---@return string[]? readings
+---@return integer consumed byte length of the unit
+local function unit_readings(text, i)
+	local size = char_size(text, i)
+	local ch = string.sub(text, i, i + size - 1)
+	local readings = data.readings[ch]
+	if not readings then
+		return nil, size
+	end
+	local next_size = char_size(text, i + size)
+	local next_ch = string.sub(text, i + size, i + size + next_size - 1)
+	local small = SMALL_Y[next_ch] or SMALL_E[next_ch]
+	if small then
+		local merged = {}
+		for _, reading in ipairs(readings) do
+			if #reading >= 2 and string.sub(reading, -1) == "i" then
+				merged[#merged + 1] = youon_merged(reading, small)
+			else
+				merged[#merged + 1] = reading -- direct input (xya, lya, ...)
+			end
+		end
+		return merged, size + next_size -- consume the small kana too
+	end
+	return readings, size
+end
+
+---Doubled-consonant spelling for a geminate: っ+か (ka) -> kka,
+---っ+ちゃ (cha) -> tcha. Vowel- and n-initial readings have none.
+---@param reading string
+---@return string?
+local function sokuon_merged(reading)
+	if vim.startswith(reading, "ch") then
+		return "t" .. reading
+	end
+	local head = string.sub(reading, 1, 1)
+	if
+		string.match(head, "%a") and not vim.list_contains({ "a", "e", "i", "o", "u", "n" }, head)
+	then
+		return head .. reading
+	end
+end
+
 ---All romaji spellings the given text could have been typed as.
 ---Multi-byte characters without a known reading pass through as-is.
+---っ/ッ fold into the next kana's reading (っか -> kka); ー is typed as
+---the vowel the previous reading ends with, or "-" (コーヒー ->
+---koohii / ko-hi-).
 ---@param text string
 ---@param cap integer? max number of returned strings
 ---@return string[]
@@ -50,31 +107,50 @@ function M.strs(text, cap)
 	cap = cap or 64
 	local strs = { "" }
 	local i = 1
+	-- effective romas of the unit just before i, for the ー rule
+	local prev_romas ---@type string[]?
 	while i <= #text do
 		local size = char_size(text, i)
 		local ch = string.sub(text, i, i + size - 1)
-		local next_size = char_size(text, i + size)
-		local next_ch = string.sub(text, i + size, i + size + next_size - 1)
 		local romas
 		if size == 1 then
 			romas = { ch }
-		else
-			local readings = data.readings[ch]
-			if not readings then
-				romas = { ch }
-			elseif SMALL_Y[next_ch] then
-				-- small y-kana: merge into preceding i-ending readings
-				romas = {}
-				for _, reading in ipairs(readings) do
-					if #reading >= 2 and string.sub(reading, -1) == "i" then
-						romas[#romas + 1] = youon_merged(reading, SMALL_Y[next_ch])
-					else
-						romas[#romas + 1] = reading -- direct input (xya, lya, ...)
-					end
+			prev_romas = nil
+		elseif ch == "っ" or ch == "ッ" then
+			-- geminate: double the next kana's reading, consuming it like
+			-- the youon merge; falls back to direct input (xtu/ltu) when
+			-- no reading starts with a doublable consonant
+			local readings, consumed = unit_readings(text, i + size)
+			romas = {}
+			for _, reading in ipairs(readings or {}) do
+				local doubled = sokuon_merged(reading)
+				if doubled then
+					romas[#romas + 1] = doubled
 				end
-				size = size + next_size -- consume the small kana too
+			end
+			if #romas > 0 then
+				size = size + consumed
 			else
-				romas = readings
+				romas = data.readings[ch] or { ch }
+			end
+			prev_romas = romas
+		elseif ch == "ー" then
+			romas = {}
+			for _, roma in ipairs(prev_romas or {}) do
+				local vowel = string.sub(roma, -1)
+				if string.match(vowel, "[aeiou]") and not vim.list_contains(romas, vowel) then
+					romas[#romas + 1] = vowel
+				end
+			end
+			romas[#romas + 1] = "-"
+			prev_romas = nil
+		else
+			romas, size = unit_readings(text, i)
+			if not romas then
+				romas = { ch }
+				prev_romas = nil
+			else
+				prev_romas = romas
 			end
 		end
 		local expanded = {}

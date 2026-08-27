@@ -14,7 +14,10 @@ Data sources (per kanji):
 The generated tables drive two independent lookups:
   - p1/p2/p3: romaji prefix (1/2/3 letters) -> vim regex fragment,
     used by the search parser. p3 fragments may match two characters
-    at once (youon combos like しゃ = "sha").
+    at once (youon combos like しゃ = "sha"; small-e loanwords like
+    ちぇ = "che"). The five single-vowel p1 classes also contain ー
+    so a bare vowel segment matches the long-vowel mark
+    (ko|o|hi|i -> コーヒー).
   - readings: character -> romaji variants, used by the labeler to
     predict the next likely input letter of a match.
 
@@ -40,6 +43,10 @@ OUT = Path(__file__).resolve().parent.parent / "lua" / "flash-cjk" / "lang" / "j
 
 MAX_READINGS_PER_KANJI = 12
 MAX_VARIANTS_PER_READING = 8
+
+# Chōonpu: joins exactly the five single-vowel p1 classes so a bare
+# 1-letter vowel segment also matches ー (ko|o|hi|i -> コーヒー).
+CHOUONPU = "ー"
 
 # Japanese punctuation map (self-contained: ASCII + Japanese marks;
 # 。 is shared with Chinese)
@@ -272,6 +279,14 @@ def build():
                 for variant in roma_variants(merged):
                     if len(variant) == 3:
                         combos.setdefault(variant, set()).update({h + small_h, k + kata_small})
+        # foreign sounds: small-e extends shi/chi/ji (しぇ/ちぇ/じぇ in
+        # loanwords like チェック); only 3-letter spellings can be p3 keys,
+        # so じ+ぇ ("je") is dropped exactly like じゃ's "ja".
+        if r in ("shi", "chi", "ji"):
+            merged = merge_youon(r, "e")
+            for variant in roma_variants(merged):
+                if len(variant) == 3:
+                    combos.setdefault(variant, set()).update({h + "ぇ", k + "ェ"})
 
 
     # --- kanji ---
@@ -309,9 +324,19 @@ def build_tables(readings, singles, combos) -> dict:
             parts.append(char_class(singles[3][key]))
         parts.extend(sorted(combos.get(key, set())))
         p3[key] = parts[0] if len(parts) == 1 else "\\(" + "\\|".join(parts) + "\\)"
+
+    # Chōonpu extends the previous vowel, so only the five single-vowel
+    # classes gain it; the geminate mark stays reachable only through
+    # the parser's committed doubling rule (tt/kk/... or t before ch),
+    # never through a trailing incomplete onset. p2/p3/readings stay
+    # unchanged.
+    p1 = {
+        k: char_class(v | {CHOUONPU} if k in "aiueo" else v)
+        for k, v in singles[1].items()
+    }
     return {
         "readings": readings,
-        "p1": {k: char_class(v) for k, v in singles[1].items()},
+        "p1": p1,
         "p2": {k: char_class(v) for k, v in singles[2].items()},
         "p3": p3,
         "comma": PUNCT,

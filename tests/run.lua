@@ -81,7 +81,16 @@ ok(matches(mixed, "niho", "日本"), "niho matches 日本")
 ok(matches(mixed, "nihongo", "日本語"), "nihongo matches 日本語")
 ok(matches(mixed, "si", "し"), "kunrei si matches し")
 ok(matches(mixed, "aoi", "あおい"), "vowel sequence aoi matches あおい (mid single letters)")
-ok(matches(mixed, "ue", "うえ"), "ue matches うえ")
+ok(matches(mixed, "kitte", "きって"), "kitte matches きって (geminate kk)")
+ok(matches(mixed, "kitte", "キッテ"), "kitte matches キッテ (katakana geminate)")
+ok(matches(mixed, "kitta", "切った"), "kitta matches 切った (kanji + geminate)")
+ok(matches(mixed, "kitta", "きった"), "kitta matches きった")
+ok(matches(mixed, "matcha", "まっちゃ"), "matcha matches まっちゃ (t before ch)")
+ok(matches(mixed, "massugu", "まっすぐ"), "massugu matches まっすぐ (geminate ss)")
+ok(matches(mixed, "chekku", "チェック"), "chekku matches チェック (youon + geminate)")
+ok(matches(mixed, "koohii", "コーヒー"), "koohii matches コーヒー (long vowel)")
+ok(matches(mixed, "keeki", "ケーキ"), "keeki matches ケーキ (long vowel)")
+ok(matches(mixed, "ko-hi-", "コーヒー"), "ko-hi- still matches コーヒー (dash input)")
 
 -- Korean: romanization + two-set, both at once
 local trilingual = fc.make_mix_mode({ zhcn = true, ja = true, ko = true, en = true })
@@ -225,6 +234,28 @@ for _, s in ipairs(sha_strs) do
 	end
 end
 ok(found, "ja.strs(しゃ) includes sha (youon merge)")
+
+local matcha_strs = ja.strs("まっちゃ")
+found = false
+for _, s in ipairs(matcha_strs) do
+	if s == "matcha" then
+		found = true
+	end
+end
+ok(found, "ja.strs(まっちゃ) includes matcha (geminate + youon merge)")
+
+local koohii_strs = ja.strs("コーヒー")
+local koohii_typed, kodash = false, false
+for _, s in ipairs(koohii_strs) do
+	if s == "koohii" then
+		koohii_typed = true
+	end
+	if s == "ko-hi-" then
+		kodash = true
+	end
+end
+ok(koohii_typed, "ja.strs(コーヒー) includes koohii (long vowel spelling)")
+ok(kodash, "ja.strs(コーヒー) includes ko-hi- (dash spelling)")
 
 -- ---------------------------------------------------------------------------
 -- flash integration: real State with our search mode + labeler

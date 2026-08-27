@@ -87,6 +87,10 @@ local function make_nodes(comma)
 		jp = function(str)
 			return lang.get("ja").pattern(str)
 		end,
+		-- No data-table entry: the sokuon class is fixed by the rule.
+		sokuon = function()
+			return "[っッ]"
+		end,
 		ko = function(str)
 			return lang.get("ko").pattern(str)
 		end,
@@ -108,8 +112,9 @@ end
 -- Splits the input into every plausible sequence of segments.
 -- A segment is one of: a literal letter (alpha), a 2-key xiaohe
 -- double-pinyin code (pinyin), a single pinyin first letter
--- (singlepin), a 1-3 letter romaji prefix (jp), a 1-4 letter Korean
--- prefix (ko), a punctuation key (comma) or any other character.
+-- (singlepin), a 1-3 letter romaji prefix (jp), a geminate consonant
+-- keystroke for っ/ッ (sokuon), a 1-4 letter Korean prefix (ko), a
+-- punctuation key (comma) or any other character.
 ---@param str string
 ---@param prefix table? partial segmentation
 ---@param ctx {count: integer, langs: table<string,boolean>, comma: table<string,string>}
@@ -177,6 +182,19 @@ local function parser(str, prefix, ctx)
 					local seg = extend(prefix, two, "jp")
 					seg._alpha = false
 					results = append_all(results, parser(string.sub(str, 3), seg, ctx))
+				end
+				-- Geminate consonant: a doubled consonant key (kk, ss, tt, ...)
+				-- or the "t" of "tch" is a keystroke of its own for っ/ッ, so it
+				-- segments as a single letter mid-pattern. Tried before the
+				-- vowel/n singles: the triggers are disjoint, and the Rust
+				-- parser mirrors this exact alternation order.
+				local doubled = secondchar == firstchar
+					and not vim.list_contains({ "a", "e", "i", "o", "u", "n" }, firstchar)
+				local tch = firstchar == "t" and secondchar == "c" and thirdchar == "h"
+				if doubled or tch then
+					local seg = extend(prefix, firstchar, "sokuon")
+					seg._alpha = false
+					results = append_all(results, parser(string.sub(str, 2), seg, ctx))
 				end
 				-- Mid-pattern single-letter romaji is only kept for keys
 				-- that are complete syllables on their own (vowels + n);
@@ -336,7 +354,10 @@ function M.make_mix_mode(langs, filter_keys)
 			end
 		end
 		alternatives[#alternatives] = [[\)]]
-		local ret = table.concat(alternatives)
+		-- Youon data fragments carry capturing groups; with many
+		-- alternatives the pattern would cross vim's 9-group cap (E872).
+		-- The pattern is search-only, so none of them need to capture.
+		local ret = string.gsub(table.concat(alternatives), "%\\%(", "\\%%(")
 		return ret, ret
 	end
 end
