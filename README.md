@@ -63,7 +63,7 @@ Default configuration:
 	},
 	priority = { "zhcn", "ja", "ko" },
 	mixed_input = true,
-	char = true,
+	motions = { char = true },
 }
 ```
 
@@ -90,9 +90,13 @@ When multiple languages match at once, `priority = { "zhcn", "ja", "ko" }` deter
 
 Allows a single query to mix input codes from different languages. See Mixed input in the usage examples below.
 
-### `char`
+### `motions`
 
-Makes flash.nvim's built-in enhanced char motions (flash's `modes.char`, enabled by default) CJK-aware. A single typed character is matched through the same multi-language engine as `s`-jumps: `fv` jumps to `中` (Xiaohe `v` initial for zhong), while `ft` reaches `中` (Japanese kunrei-shiki `tyuu`) or `梯` (pinyin `ti`). `;`/`,` cycling, counts, and operator-pending behave exactly like flash's native motions. Matching is single-character only — press `s` for full multi-key readings. Set `setup({ char = false })` to restore flash's native ASCII-only behavior.
+Groups the integrations on motions flash.nvim itself owns. Today that is flash's `modes.char`; future flash-owned surfaces (such as the `/` search mode) would be configured here as well.
+
+#### `char`
+
+Makes flash.nvim's built-in enhanced char motions (flash's `modes.char`, enabled by default) CJK-aware. A single typed character is matched through the same multi-language engine as `s`-jumps: `fv` jumps to `中` (Xiaohe `v` initial for zhong), while `ft` reaches `中` (Japanese kunrei-shiki `tyuu`) or `梯` (pinyin `ti`). `;`/`,` cycling, counts, and operator-pending behave exactly like flash's native motions. Matching is single-character only — press `s` for full multi-key readings. Set `setup({ motions = { char = false } })` to restore flash's native ASCII-only behavior.
 
 ## ⌨️ Usage
 

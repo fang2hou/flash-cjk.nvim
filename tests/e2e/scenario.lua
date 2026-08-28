@@ -345,16 +345,16 @@ do
 	okc, errc = pcall(Char.jump, ";")
 	check_landed("; repeat: second b, no new char read", 1, 9, okc, errc)
 
-	-- setup({ char = false }) restores native char motions: no literal
-	-- z anywhere on the line and no CJK reading consulted, so the
-	-- cursor must stay put
-	fc.setup({ char = false })
+	-- setup({ motions = { char = false } }) restores native char motions:
+	-- no literal z anywhere on the line and no CJK reading consulted,
+	-- so the cursor must stay put
+	fc.setup({ motions = { char = false } })
 	okc, errc = char_jump("f", "z")
-	check_landed("char=false: f+z native finds nothing, no move", 1, 1, okc, errc)
+	check_landed("motions.char=false: f+z native finds nothing, no move", 1, 1, okc, errc)
 
 	-- re-enable what this section disabled
-	fc.setup({ char = true })
-	ok(fc.config.char == true, "char re-enabled after the disabled check")
+	fc.setup({ motions = { char = true } })
+	ok(fc.config.motions.char == true, "char re-enabled after the disabled check")
 end
 
 finish()

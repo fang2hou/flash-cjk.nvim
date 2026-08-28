@@ -115,8 +115,20 @@ function M.setup(opts)
 	if type(opts.mixed_input) == "boolean" then
 		M.config.mixed_input = opts.mixed_input
 	end
-	if type(opts.char) == "boolean" then
-		M.config.char = opts.char
+	if opts.motions ~= nil then
+		if type(opts.motions) ~= "table" then
+			error("flash-cjk: motions must be a table")
+		end
+		-- every motion flag is boolean; a non-boolean (e.g. the string
+		-- "false") is truthy in Lua and would silently enable the
+		-- integration, so it is rejected instead of coerced
+		for key, value in pairs(opts.motions) do
+			if type(value) ~= "boolean" then
+				error(("flash-cjk: motions.%s must be a boolean"):format(key))
+			end
+		end
+		-- unknown motion keys are kept unused: forward compatibility
+		M.config.motions = vim.tbl_deep_extend("force", {}, M.config.motions, opts.motions)
 	end
 	if opts.priority ~= nil then
 		-- labeler-layer only: the mix mode does not read it

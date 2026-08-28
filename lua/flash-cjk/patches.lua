@@ -89,7 +89,7 @@ function M.char_mode_patch()
 	Char.mode = function(motion)
 		local native = orig(motion)
 		return function(c)
-			if not config.config.char then
+			if not config.config.motions.char then
 				return native(c)
 			end
 			-- compiled per input, so setup() changes are always honored

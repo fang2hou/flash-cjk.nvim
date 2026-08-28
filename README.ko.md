@@ -63,7 +63,7 @@ Neovim ≥ 0.10과 [flash.nvim](https://github.com/folke/flash.nvim)이 필요�
 	},
 	priority = { "zhcn", "ja", "ko" },
 	mixed_input = true,
-	char = true,
+	motions = { char = true },
 }
 ```
 
@@ -90,9 +90,13 @@ Neovim ≥ 0.10과 [flash.nvim](https://github.com/folke/flash.nvim)이 필요�
 
 하나의 쿼리에 서로 다른 언어의 입력 코드를 섞어 사용할 수 있습니다. 아래 사용법 예시의 혼합 입력을 참고하세요.
 
-### `char`
+### `motions`
 
-flash.nvim 내장 확장 문자 모션(flash의 `modes.char`, 기본 활성화)도 CJK 매칭을 지원하게 합니다. 입력한 한 글자가 `s` 점프와 동일한 다국어 엔진으로 매칭됩니다. `fv`로 「中」에 점프할 수 있고(샤오헤 쌍병음에서 zhong의 초성 `v`), `ft`면 「中」(일본어 훈레이식 로마자 `tyuu`)이나 「梯」(병음 `ti`)에 도달합니다. `;`/`,` 순환, 카운트, 오퍼레이터 대기 동작은 flash 네이티브 모션과 완전히 같습니다. 매칭은 한 글자만 지원하며, 여러 키로 이루어진 읽기를 입력하려면 `s`를 사용하세요. `setup({ char = false })`로 설정하면 flash 네이티브의 ASCII 전용 동작으로 되돌아갑니다.
+flash.nvim 자체 모션에 대한 통합 설정 묶음입니다. 현재는 flash의 `modes.char`뿐이며, 향후 flash 자체 진입점(예: `/` 검색 모드)도 여기서 설정하게 됩니다.
+
+#### `char`
+
+flash.nvim 내장 확장 문자 모션(flash의 `modes.char`, 기본 활성화)도 CJK 매칭을 지원하게 합니다. 입력한 한 글자가 `s` 점프와 동일한 다국어 엔진으로 매칭됩니다. `fv`로 「中」에 점프할 수 있고(샤오헤 쌍병음에서 zhong의 초성 `v`), `ft`면 「中」(일본어 훈레이식 로마자 `tyuu`)이나 「梯」(병음 `ti`)에 도달합니다. `;`/`,` 순환, 카운트, 오퍼레이터 대기 동작은 flash 네이티브 모션과 완전히 같습니다. 매칭은 한 글자만 지원하며, 여러 키로 이루어진 읽기를 입력하려면 `s`를 사용하세요. `setup({ motions = { char = false } })`로 설정하면 flash 네이티브의 ASCII 전용 동작으로 되돌아갑니다.
 
 ## ⌨️ 사용법
 

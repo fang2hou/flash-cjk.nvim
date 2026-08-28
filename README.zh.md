@@ -63,7 +63,7 @@ https://github.com/user-attachments/assets/37599dab-b0c6-4d90-8463-cb4706841ac3
 	},
 	priority = { "zhcn", "ja", "ko" },
 	mixed_input = true,
-	char = true,
+	motions = { char = true },
 }
 ```
 
@@ -90,9 +90,13 @@ https://github.com/user-attachments/assets/37599dab-b0c6-4d90-8463-cb4706841ac3
 
 允许一次查询同时包含不同语言的输入码，见下方使用示例中的混合输入。
 
-### `char`
+### `motions`
 
-让 flash.nvim 内置的增强字符移动（flash 的 `modes.char`，默认开启）也支持 CJK 匹配。输入的单个字符会通过与 `s` 跳转相同的多语言引擎匹配：`fv` 可以跳到「中」（小鹤双拼中 zhong 的声母 `v`），`ft` 则能到达「中」（日语训令式罗马字 `tyuu`）或「梯」（拼音 `ti`）。`;`/`,` 循环、计数和 operator-pending 行为与 flash 原生移动完全一致。匹配只支持单个字符——需要完整的多键输入码时请按 `s`。设置 `setup({ char = false })` 即可恢复 flash 原生的纯 ASCII 行为。
+用于集中配置 flash.nvim 自有移动方式的集成。目前是 flash 的 `modes.char`，未来其他 flash 自有的入口（例如 `/` 搜索模式）也会放在这里配置。
+
+#### `char`
+
+让 flash.nvim 内置的增强字符移动（flash 的 `modes.char`，默认开启）也支持 CJK 匹配。输入的单个字符会通过与 `s` 跳转相同的多语言引擎匹配：`fv` 可以跳到「中」（小鹤双拼中 zhong 的声母 `v`），`ft` 则能到达「中」（日语训令式罗马字 `tyuu`）或「梯」（拼音 `ti`）。`;`/`,` 循环、计数和 operator-pending 行为与 flash 原生移动完全一致。匹配只支持单个字符——需要完整的多键输入码时请按 `s`。设置 `setup({ motions = { char = false } })` 即可恢复 flash 原生的纯 ASCII 行为。
 
 ## ⌨️ 使用
 

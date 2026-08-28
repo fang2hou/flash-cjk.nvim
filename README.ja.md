@@ -63,7 +63,7 @@ Neovim ≥ 0.10 と [flash.nvim](https://github.com/folke/flash.nvim) が必要�
 	},
 	priority = { "zhcn", "ja", "ko" },
 	mixed_input = true,
-	char = true,
+	motions = { char = true },
 }
 ```
 
@@ -90,9 +90,13 @@ Neovim ≥ 0.10 と [flash.nvim](https://github.com/folke/flash.nvim) が必要�
 
 1 回のクエリに、異なる言語の入力コードを混在させられます。入力例は下の使い方の「混合入力」を参照してください。
 
-### `char`
+### `motions`
 
-flash.nvim 内蔵の拡張文字モーション（flash の `modes.char`、デフォルトで有効）を CJK 対応にします。入力した 1 文字が、`s` ジャンプと同じ多言語エンジンでマッチされます。`fv` で「中」へジャンプでき（小鶴双拼の zhong の頭文字 `v`）、`ft` なら「中」（日本語訓令式ローマ字 `tyuu`）や「梯」（ピンイン `ti`）に到達します。`;`/`,` の循環、カウント、オペレータ待機時の挙動は flash ネイティブのモーションとまったく同じです。マッチングは 1 文字のみで、複数キーの読みを入力したい場合は `s` を使ってください。`setup({ char = false })` を設定すると、flash ネイティブの ASCII 専用の挙動に戻ります。
+flash.nvim 自身が持つモーションへの統括設定です。現時点では flash の `modes.char` のみで、将来的に flash 自身の入口（`/` 検索モードなど）もここに追加されます。
+
+#### `char`
+
+flash.nvim 内蔵の拡張文字モーション（flash の `modes.char`、デフォルトで有効）を CJK 対応にします。入力した 1 文字が、`s` ジャンプと同じ多言語エンジンでマッチされます。`fv` で「中」へジャンプでき（小鶴双拼の zhong の頭文字 `v`）、`ft` なら「中」（日本語訓令式ローマ字 `tyuu`）や「梯」（ピンイン `ti`)に到達します。`;`/`,` の循環、カウント、オペレータ待機時の挙動は flash ネイティブのモーションとまったく同じです。マッチングは 1 文字のみで、複数キーの読みを入力したい場合は `s` を使ってください。`setup({ motions = { char = false } })` を設定すると、flash ネイティブの ASCII 専用の挙動に戻ります。
 
 ## ⌨️ 使い方
 

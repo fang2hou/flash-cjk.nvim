@@ -909,10 +909,17 @@ do
 	local ok_re2, re_v2 = pcall(vim.regex, Char.mode("f")("v"))
 	ok(ok_re2 and re_v2:match_str("中") ~= nil, "char mode: pattern still matches after re-patch")
 
-	-- config gate at pattern level: char=false restores the native literal
-	fc.setup({ char = false })
-	ok(Char.mode("f")("v") == "\\Vv", "char mode: char=false falls back to native \\Vv")
-	fc.setup({ char = true })
+	-- config gate at pattern level: motions.char=false restores the native literal
+	fc.setup({ motions = { char = false } })
+	ok(Char.mode("f")("v") == "\\Vv", "char mode: motions.char=false falls back to native \\Vv")
+	fc.setup({ motions = { char = true } })
+
+	-- non-boolean flags must error, not silently enable: "false" is
+	-- truthy in Lua, and a rejected setup leaves the config untouched
+	local ok_bad = pcall(fc.setup, { motions = { char = "false" } })
+	ok(not ok_bad, "char mode: motions.char rejects non-boolean values")
+	ok(fc.config.motions.char == true, "char mode: config untouched after rejected setup")
+	ok(not pcall(fc.setup, { motions = "nope" }), "char mode: motions rejects non-table values")
 
 	-- flow level: real Char.jump in a scratch buffer. The state must
 	-- be reset between cases -- same-motion repeats read no new char.
@@ -970,14 +977,14 @@ do
 		"char flow: ; repeat jumps to the second b (byte 9)"
 	)
 
-	-- config gate through the loop: char=false restores native semantics
-	fc.setup({ char = false })
+	-- config gate through the loop: motions.char=false restores native semantics
+	fc.setup({ motions = { char = false } })
 	cur, ran = char_case("f", "z")
 	ok(
 		ran and cur[1] == 1 and cur[2] == 0,
-		"char flow: char=false f+z finds no literal z (no move)"
+		"char flow: motions.char=false f+z finds no literal z (no move)"
 	)
-	fc.setup({ char = true }) -- re-enable for anything that follows
+	fc.setup({ motions = { char = true } }) -- re-enable for anything that follows
 end
 
 print(string.format("%d passed, %d failed", passed, failed))
