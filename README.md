@@ -63,6 +63,7 @@ Default configuration:
 	},
 	priority = { "zhcn", "ja", "ko" },
 	mixed_input = true,
+	motions = { char = true, search = true },
 }
 ```
 
@@ -89,6 +90,24 @@ When multiple languages match at once, `priority = { "zhcn", "ja", "ko" }` deter
 
 Allows a single query to mix input codes from different languages. See Mixed input in the usage examples below.
 
+### `motions`
+
+Groups the integrations on motions flash.nvim itself owns. Today that is flash's `modes.char` and the `/` search mode; future flash-owned surfaces would be configured here as well.
+
+#### `char`
+
+Makes flash.nvim's built-in enhanced char motions (flash's `modes.char`, enabled by default) CJK-aware. A single typed character is matched through the same multi-language engine as `s`-jumps: `fv` jumps to `中` (Xiaohe `v` initial for zhong), while `ft` reaches `中` (Japanese kunrei-shiki `tyuu`) or `梯` (pinyin `ti`). `;`/`,` cycling, counts, and operator-pending behave exactly like flash's native motions. Matching is single-character only — press `s` for full multi-key readings. Set `setup({ motions = { char = false } })` to restore flash's native ASCII-only behavior.
+
+#### `search`
+
+Makes the `/` and `?` label overlays CJK-aware through flash.nvim's search integration. This requires flash's own search mode, which is **off by default in flash** — enable it in your flash opts:
+
+```lua
+{ modes = { search = { enabled = true } } }
+```
+
+Type the query (pinyin/romaji letters) and flash-cjk's predictive labels appear on CJK matches; press a label char to jump. Labels never collide with likely continuation letters, so extending the query never jumps you somewhere unexpected. Pressing `<cr>` commits the search as typed, and `n`/`N` keep native vim semantics. Queries containing vim regex metacharacters (`\ . * [ ] ^ $ ~ /`) or non-ASCII bytes pass through as native vim regex, so `/.*` and `/^func` keep working exactly as before. On the `/` path, punctuation CJK classes cover only non-metacharacter keys (e.g. `, ; : ' "`); the `s`-jump keeps the full set including `.` `?` `[` `]`.
+
 ## ⌨️ Usage
 
 Usage is almost identical to flash.nvim: press `s`, then type the input code for the target text. The examples below include the trigger key `s` as part of the full key sequence.
@@ -104,6 +123,14 @@ Type `si` (`s` starts flash-cjk and `i` is the query) to match the `i` in `Engli
 ### Mixed input
 
 Type `sav` to match `a中`: `a` is matched literally as ASCII, while `v` is the Xiaohe double pinyin code prefix for `中`.
+
+### Char motions
+
+The same engine also powers `f`/`t`/`F`/`T` (flash's enhanced char motions). On the sample line above, `fv` jumps to `中`.
+
+### Search
+
+With flash's search mode enabled, `/ti` shows flash-cjk labels on 梯/ち; press the label to jump.
 
 ### Multi-language matching
 

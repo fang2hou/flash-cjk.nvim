@@ -63,6 +63,7 @@ https://github.com/user-attachments/assets/37599dab-b0c6-4d90-8463-cb4706841ac3
 	},
 	priority = { "zhcn", "ja", "ko" },
 	mixed_input = true,
+	motions = { char = true, search = true },
 }
 ```
 
@@ -89,6 +90,24 @@ https://github.com/user-attachments/assets/37599dab-b0c6-4d90-8463-cb4706841ac3
 
 允许一次查询同时包含不同语言的输入码，见下方使用示例中的混合输入。
 
+### `motions`
+
+用于集中配置 flash.nvim 自有移动方式的集成。目前包括 flash 的 `modes.char` 和 `/` 搜索模式，未来其他 flash 自有的入口也会放在这里配置。
+
+#### `char`
+
+让 flash.nvim 内置的增强字符移动（flash 的 `modes.char`，默认开启）也支持 CJK 匹配。输入的单个字符会通过与 `s` 跳转相同的多语言引擎匹配：`fv` 可以跳到「中」（小鹤双拼中 zhong 的声母 `v`），`ft` 则能到达「中」（日语训令式罗马字 `tyuu`）或「梯」（拼音 `ti`）。`;`/`,` 循环、计数和 operator-pending 行为与 flash 原生移动完全一致。匹配只支持单个字符——需要完整的多键输入码时请按 `s`。设置 `setup({ motions = { char = false } })` 即可恢复 flash 原生的纯 ASCII 行为。
+
+#### `search`
+
+通过 flash.nvim 的搜索集成，让 `/` 和 `?` 的标签覆盖层支持 CJK 匹配。它依赖 flash 自身的搜索模式，而该模式在 flash 中**默认关闭**——需要在 flash 的配置中开启：
+
+```lua
+{ modes = { search = { enabled = true } } }
+```
+
+输入查询（拼音/罗马字字母）后，flash-cjk 的预测式标签会出现在 CJK 匹配项上，按下标签字符即可跳转。标签绝不会与可能的后续输入字母冲突，因此继续输入查询不会被意外跳走。直接按 `<cr>` 会按原样提交搜索，`n`/`N` 保持原生 vim 语义。包含 vim 正则元字符（`\ . * [ ] ^ $ ~ /`）或非 ASCII 字节的查询会原样交给原生 vim 正则处理，所以 `/.*`、`/^func` 的行为和以前完全一样。在 `/` 路径上，标点的 CJK 匹配类只覆盖非元字符键（如 `, ; : ' "`）；`s` 跳转仍保留包括 `.` `?` `[` `]` 在内的完整集合。
+
 ## ⌨️ 使用
 
 用法和 flash.nvim 基本一致：按下 `s`，再输入目标文本的输入码即可。下面的示例会把触发键 `s` 一并写入完整按键序列。
@@ -104,6 +123,14 @@ English, a中文，日本語, 한국어. Hello, 你好，こんにちは、안�
 ### 混合输入
 
 输入 `sav` 可以匹配「a中」：`a` 使用 ASCII 字面匹配，`v` 是小鹤双拼中「中」的输入码前缀。
+
+### 字符移动
+
+同样的引擎也作用于 `f`/`t`/`F`/`T`（flash 的增强字符移动）。在上面这行示例中，`fv` 会跳到「中」。
+
+### 搜索
+
+开启 flash 的搜索模式后，输入 `/ti` 会在 梯/ち 上显示 flash-cjk 标签，按下标签即可跳转。
 
 ### 多语言匹配
 
