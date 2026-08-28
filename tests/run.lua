@@ -922,9 +922,9 @@ do
 	ok(not pcall(fc.setup, { motions = "nope" }), "char mode: motions rejects non-table values")
 	-- unknown motion fields are dropped (forward compatibility),
 	-- including future table-shaped ones -- nothing arbitrary persists
-	fc.setup({ motions = { search = { enabled = true } } })
+	fc.setup({ motions = { future = { enabled = true } } })
 	ok(
-		fc.config.motions.char == true and fc.config.motions.search == nil,
+		fc.config.motions.char == true and fc.config.motions.future == nil,
 		"char mode: unknown motion fields dropped by setup"
 	)
 	local ok_typo = pcall(fc.setup, { motions = { typo = true } })
@@ -997,6 +997,151 @@ do
 		"char flow: motions.char=false f+z finds no literal z (no move)"
 	)
 	fc.setup({ motions = { char = true } }) -- re-enable for anything that follows
+end
+
+-- ---------------------------------------------------------------------------
+-- search mode (/ and ?): CJK-aware search labels through the
+-- idempotent search_mode_patch -- at state level. Search.start()
+-- builds a full flash State outside any cmdline, so no real `/`
+-- session is needed to exercise the swap
+
+do
+	local patches = require("flash-cjk.patches")
+	patches.search_mode_patch() -- no-op when setup() already installed it
+	local Search = require("flash.plugins.search")
+
+	ok(Search._flash_cjk_patched == true, "search mode: patch marker set on flash.plugins.search")
+	local start_ref = Search.start
+	patches.search_mode_patch()
+	ok(Search.start == start_ref, "search mode: re-patch does not double-wrap")
+
+	local function search_reset()
+		if Search.state then
+			Search.state:hide()
+		end
+		Search.state = nil
+	end
+
+	vim.cmd("enew!")
+	vim.api.nvim_buf_set_lines(
+		0,
+		0,
+		-1,
+		false,
+		{ "ti 梯 ち", "func 日本 ab*cd", "な に ぬ ね の" }
+	)
+	vim.api.nvim_win_set_cursor(0, { 1, 0 })
+
+	-- enhanced start: mode compiler and labeler are swapped in
+	-- post-construction
+	Search.start()
+	local state = assert(Search.state)
+	ok(type(state.pattern.mode) == "function", "search mode: pattern.mode swapped to a function")
+	ok(type(state.labeler) == "function", "search mode: labeler swapped to a function")
+
+	state:update({ pattern = "ti", check_jump = false })
+	local hit_cn, hit_kana = false, false
+	for _, m in ipairs(state.results) do
+		-- pos[2] is a 0-based byte column: compare against 3 bytes
+		local ch = string.sub(vim.fn.getline(m.pos[1]), m.pos[2] + 1, m.pos[2] + 3)
+		if ch == "梯" then
+			hit_cn = true
+		elseif ch == "ち" then
+			hit_kana = true
+		end
+	end
+	ok(hit_cn, "search mode: ti finds pinyin 梯")
+	ok(hit_kana, "search mode: ti finds kana ち")
+	ok(state.pattern.search ~= "ti", "search mode: query compiled, not passed through")
+	local re_ti = vim.regex(state.pattern.search)
+	ok(
+		re_ti:match_str("梯") ~= nil and re_ti:match_str("ち") ~= nil,
+		"search mode: compiled regex matches 梯 and ち"
+	)
+
+	-- multi-char queries need the predictive labeler: with pattern "n",
+	-- every candidate's next romaji letter (na ni nu ne no) is a
+	-- likely continuation -- none may collide with an assigned label
+	-- (flash's own labeler would hand out "a" as its first label here)
+	state:update({ pattern = "n", check_jump = false })
+	local predicted = { a = true, e = true, i = true, o = true, u = true }
+	local n_labeled_search, collide = 0, false
+	for _, m in ipairs(state.results) do
+		if m.label then
+			n_labeled_search = n_labeled_search + 1
+			if predicted[m.label] then
+				collide = true
+			end
+		end
+	end
+	ok(
+		n_labeled_search >= 5 and not collide,
+		"search mode: predictive labeler skips likely next letters (a/i/u/e/o)"
+	)
+
+	-- native regex contract: the magic set, the delimiter and
+	-- non-ASCII bytes pass through verbatim -- flash's operator-pending
+	-- \\%<line>l\\%<col>c. rewrite relies on this
+	for _, p in ipairs({ "\\%1l\\%2c.", ".*", "^func", "foo.*bar", "ab*cd", "日本" }) do
+		state:update({ pattern = p, check_jump = false })
+		ok(state.pattern.search == p, "search mode: native passthrough for " .. vim.inspect(p))
+	end
+
+	-- punctuation split: non-meta keys compile through the mix (,
+	-- matches ，); metacharacters like . pass through verbatim -- only
+	-- the s-jump keeps the full punctuation set
+	state:update({ pattern = ",", check_jump = false })
+	ok(state.pattern.search ~= ",", "search mode: comma compiles through the mix mode")
+	ok(
+		vim.regex(state.pattern.search):match_str("，") ~= nil,
+		"search mode: comma pattern matches ，"
+	)
+	state:update({ pattern = ".", check_jump = false })
+	ok(state.pattern.search == ".", "search mode: dot passes through verbatim")
+
+	-- gate: motions.search=false leaves flash's native search state
+	search_reset()
+	fc.setup({ motions = { search = false } })
+	Search.start()
+	local plain = assert(Search.state)
+	ok(
+		plain.pattern.mode == "search",
+		"search mode: motions.search=false keeps the native mode string"
+	)
+	plain:update({ pattern = "ti", check_jump = false })
+	local gate_cjk = false
+	for _, m in ipairs(plain.results) do
+		local ch = string.sub(vim.fn.getline(m.pos[1]), m.pos[2] + 1, m.pos[2] + 3)
+		if ch == "梯" or ch == "ち" then
+			gate_cjk = true
+		end
+	end
+	ok(not gate_cjk, "search mode: gate off -- ti results are literal-only (no CJK)")
+	ok(#plain.results > 0, "search mode: gate off -- literal ti still found")
+	search_reset()
+
+	-- re-enable: a fresh start picks the swap up again (compiled per
+	-- start, so setup() changes are always honored)
+	fc.setup({ motions = { search = true } })
+	Search.start()
+	ok(
+		type(Search.state.pattern.mode) == "function" and type(Search.state.labeler) == "function",
+		"search mode: re-enabled start swaps mode and labeler in again"
+	)
+	search_reset()
+
+	-- validation mirrors char mode: known flags must be booleans (a
+	-- rejected setup leaves the config untouched); unknown fields drop
+	ok(
+		not pcall(fc.setup, { motions = { search = "false" } }),
+		"search mode: motions.search rejects non-boolean values"
+	)
+	ok(fc.config.motions.search == true, "search mode: config untouched after rejected setup")
+	local ok_typo2 = pcall(fc.setup, { motions = { typo2 = true } })
+	ok(
+		ok_typo2 and fc.config.motions.typo2 == nil,
+		"search mode: unknown motion fields dropped, not persisted"
+	)
 end
 
 print(string.format("%d passed, %d failed", passed, failed))

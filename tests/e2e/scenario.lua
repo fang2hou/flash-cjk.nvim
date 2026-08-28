@@ -16,6 +16,7 @@ local function ok(cond, msg)
 		failed = failed + 1
 		out:write("FAIL " .. msg .. "\n")
 	end
+	out:flush() -- survive a killed run: the file is the only signal
 end
 
 local function finish()
@@ -357,4 +358,269 @@ do
 	ok(fc.config.motions.char == true, "char re-enabled after the disabled check")
 end
 
-finish()
+-- 4. Search mode (/ and ?) through the real cmdline flow: `/` typed
+-- via nvim_input opens the cmdline, flash's CmdlineEnter autocmd
+-- creates the search state, every CmdlineChanged recompiles the
+-- pattern through flash-cjk's mode fn, and typing a label char jumps
+-- via flash's own check_jump. The search wrap is vim-regex in BOTH
+-- phases (rust never touches modes.search), so every check is
+-- phase-agnostic. The cmdline is closed and the module state reset
+-- between cases so nothing leaks past this section.
+--
+-- The main input loop only consumes nvim_input typeahead once this
+-- scheduled scenario callback has RETURNED (vim.wait pumps events but
+-- never hands queued keys to the cmdline), so the cases run as
+-- coroutines driven by a uv timer between cmdline keystrokes --
+-- real `/` keys, real autocmds, only the observer is async. The
+-- driver owns finish(): it fires once the last case settles.
+do
+	local Search = require("flash.plugins.search")
+	local uv = vim.uv or vim.loop
+	local slines = { "aa 中 bb 梯 cc", "xx ち yy" }
+	local function buf_reset()
+		vim.cmd("enew!")
+		vim.api.nvim_buf_set_lines(0, 0, -1, false, slines)
+		vim.api.nvim_win_set_cursor(0, { 1, 0 })
+	end
+
+	local function match_char(m)
+		local line = (vim.api.nvim_buf_get_lines(0, m.pos[1] - 1, m.pos[1], false))[1] or ""
+		return line:sub(m.pos[2] + 1, m.pos[2] + 3) -- CJK: 3 bytes
+	end
+
+	local function any_cjk(results)
+		for _, m in ipairs(results or {}) do
+			local ch = match_char(m)
+			if ch == "梯" or ch == "ち" then
+				return true
+			end
+		end
+		return false
+	end
+
+	local function cmdline_open()
+		return vim.fn.getcmdtype() ~= ""
+	end
+
+	-- suspends the case until pred() holds; the driver resumes with
+	-- false once the case deadline passes, so callers fail honestly
+	local function yield(pred)
+		return (coroutine.yield(pred))
+	end
+
+	-- exits any open cmdline FIRST (its CmdlineLeave autocmd still
+	-- reads Search.state), then drops the module state
+	local function search_reset()
+		if cmdline_open() then
+			vim.api.nvim_input("<esc>")
+		end
+		yield(function()
+			return not cmdline_open()
+		end)
+		if Search.state then
+			Search.state:hide()
+			Search.state = nil
+		end
+	end
+
+	-- feeds `cmd .. query` into the real cmdline and waits for flash's
+	-- state to settle on the full query (waits on the pattern, not on
+	-- matches -- literal-only queries legitimately produce none)
+	local function cmdline_search(cmd, query)
+		vim.api.nvim_input(cmd .. query)
+		return yield(function()
+			return Search.state ~= nil
+				and Search.state.pattern ~= nil
+				and Search.state.pattern.pattern == query
+		end)
+	end
+
+	local cases = {}
+	local function add_case(fn)
+		cases[#cases + 1] = coroutine.create(fn)
+	end
+
+	-- /ti: pinyin 梯 and romaji ち both match through the mix mode,
+	-- the compiled pattern keeps the plain-text alternative, and a
+	-- real label char jumps the cursor onto the CJK match
+	add_case(function()
+		buf_reset()
+		search_reset()
+		local opened = cmdline_search("/", "ti")
+		ok(opened, "search /ti: cmdline flow created a flash search state")
+		if opened and Search.state.results then
+			ok(
+				any_cjk(Search.state.results),
+				"search /ti: results include CJK (梯/ち) through pinyin+romaji"
+			)
+			ok(
+				Search.state.pattern.search:find("[tT][iI]", 1, true) ~= nil,
+				"search /ti: compiled pattern also keeps the literal [tT][iI] alternative"
+			)
+			local target
+			for _, m in ipairs(Search.state.results) do
+				if m.label and (match_char(m) == "梯" or match_char(m) == "ち") then
+					target = m
+					break
+				end
+			end
+			if target then
+				local want_r, want_c = target.pos[1], target.pos[2]
+				local want_ch = match_char(target)
+				-- extends the cmdline by one char naming a label:
+				-- flash's check_jump fires, exits the cmdline, jumps
+				vim.api.nvim_input(target.label)
+				local landed = yield(function()
+					local cur = vim.api.nvim_win_get_cursor(0)
+					return Search.state == nil and cur[1] == want_r and cur[2] == want_c
+				end)
+				local cur = vim.api.nvim_win_get_cursor(0)
+				ok(
+					landed,
+					("search /ti: label %s jumped the cursor onto %s (got %d,%d want %d,%d)"):format(
+						target.label,
+						want_ch,
+						cur[1],
+						cur[2],
+						want_r,
+						want_c
+					)
+				)
+			else
+				ok(false, "search /ti: no labeled CJK match to jump to")
+			end
+		elseif opened then
+			ok(false, "search /ti: no results on the search state")
+		end
+	end)
+
+	-- ? runs the same flow backward: same CJK matches, forward=false
+	add_case(function()
+		buf_reset()
+		search_reset()
+		local opened = cmdline_search("?", "ti")
+		ok(opened, "search ?ti: cmdline flow created a flash search state")
+		if opened and Search.state.results then
+			ok(
+				Search.state.opts.search.forward == false,
+				"search ?ti: state marks the search backward (forward=false)"
+			)
+			ok(any_cjk(Search.state.results), "search ?ti: results include CJK (梯/ち)")
+		elseif opened then
+			ok(false, "search ?ti: no results on the search state")
+		end
+	end)
+
+	-- metacharacter queries pass through verbatim: `.*` must reach
+	-- flash as the plain vim regex it was typed as, not a CJK class
+	add_case(function()
+		buf_reset()
+		search_reset()
+		local opened = cmdline_search("/", ".*")
+		ok(opened, "search /.*: cmdline flow reached the pattern")
+		if opened then
+			ok(
+				Search.state.pattern.search == ".*",
+				("search /.*: pattern passed through verbatim (got %s)"):format(
+					tostring(Search.state.pattern.search)
+				)
+			)
+		end
+	end)
+
+	-- gate: motions.search=false leaves flash's search mode untouched
+	-- -- the pattern mode stays flash's own "search" string and /ti is
+	-- literal-only (no CJK results; this buffer has no literal "ti")
+	add_case(function()
+		fc.setup({ motions = { search = false } })
+		buf_reset()
+		search_reset()
+		local opened = cmdline_search("/", "ti")
+		ok(opened, "search gate: cmdline flow created a flash search state")
+		if opened then
+			ok(
+				type(Search.state.pattern.mode) == "string",
+				"search gate: pattern mode untouched (flash's own string)"
+			)
+			ok(
+				not any_cjk(Search.state.results),
+				"search gate: /ti literal-only with motions.search=false (no CJK results)"
+			)
+		end
+		search_reset()
+
+		-- re-enable what this section disabled
+		fc.setup({ motions = { search = true } })
+		ok(fc.config.motions.search == true, "search re-enabled after the disabled check")
+	end)
+
+	-- trailer: never leave the cmdline open past this section, so no
+	-- cmdline state leaks into anything that runs later
+	add_case(function()
+		-- (a blocking getchar drain is off-limits here: it would stall
+		-- the driver mid-case, past even its deadline)
+		search_reset()
+	end)
+
+	-- one resume per tick: start the case (pred == nil), or resume it
+	-- with the pred's verdict -- false once the per-case deadline
+	-- passes, so timeouts fail their check instead of hanging
+	local timer = assert(uv.new_timer())
+	local idx, pred, deadline = 1, nil, nil
+	local CASE_MS, SECTION_MS = 5000, 60000
+	local section_deadline = uv.now() + SECTION_MS
+	-- ticks queued while a case body pumps the loop must not resume
+	-- the still-running coroutine ("cannot resume running coroutine")
+	local ticking = false
+	local function stop()
+		timer:stop()
+		timer:close()
+		finish()
+	end
+	local function step()
+		if uv.now() > section_deadline then
+			ok(false, "search section: global timeout")
+			return stop()
+		end
+		local co = cases[idx]
+		if not co then
+			return stop()
+		end
+		if coroutine.status(co) == "dead" then
+			idx, pred = idx + 1, nil
+			return
+		end
+		local verdict = pred and pred()
+		if pred and not verdict and uv.now() <= deadline then
+			return -- still waiting on the current pred
+		end
+		local ran, next_pred = coroutine.resume(co, pred and verdict or nil)
+		deadline = uv.now() + CASE_MS
+		if not ran then
+			ok(false, "search case crashed: " .. tostring(next_pred))
+			idx, pred = idx + 1, nil
+			return
+		end
+		if coroutine.status(co) == "dead" then
+			idx, pred = idx + 1, nil
+		else
+			pred = next_pred
+		end
+	end
+	timer:start(
+		10,
+		10,
+		vim.schedule_wrap(function()
+			if ticking then
+				return
+			end
+			ticking = true
+			local ran, err = pcall(step)
+			ticking = false
+			if not ran then
+				ok(false, "search case crashed: " .. tostring(err))
+				idx, pred = idx + 1, nil
+			end
+		end)
+	)
+end

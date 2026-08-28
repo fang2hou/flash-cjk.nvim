@@ -44,6 +44,10 @@ require("lazy").setup({
 			"folke/flash.nvim",
 			opts = {
 				highlight = { backdrop = false, matches = false },
+				-- flash ships modes.search disabled; the e2e search-mode
+				-- section drives the real / and ? cmdline flow, which only
+				-- creates a search state when the mode is enabled
+				modes = { search = { enabled = true } },
 			},
 		},
 		{

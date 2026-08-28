@@ -19,8 +19,9 @@ M.config = {
 	},
 	priority = { "zhcn", "ja", "ko" },
 	mixed_input = true,
-	-- integrations on flash-owned entry points (char: CJK-aware f/t/F/T)
-	motions = { char = true },
+	-- integrations on flash-owned entry points (char: CJK-aware
+	-- f/t/F/T, search: CJK-aware / and ?)
+	motions = { char = true, search = true },
 }
 
 ---Normalizes one languages[lang] value: true -> enabled, false ->
@@ -64,7 +65,7 @@ end
 ---silently enable the integration). Unknown fields are ignored
 ---(forward compatibility).
 ---@param motions table
----@return table normalized { char?: boolean }
+---@return table normalized { char?: boolean, search?: boolean }
 function M.normalize_motions(motions)
 	local normalized = {}
 	if motions.char ~= nil then
@@ -72,6 +73,12 @@ function M.normalize_motions(motions)
 			error("flash-cjk: motions.char must be a boolean")
 		end
 		normalized.char = motions.char
+	end
+	if motions.search ~= nil then
+		if type(motions.search) ~= "boolean" then
+			error("flash-cjk: motions.search must be a boolean")
+		end
+		normalized.search = motions.search
 	end
 	return normalized
 end
