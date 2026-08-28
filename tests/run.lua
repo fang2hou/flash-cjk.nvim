@@ -854,6 +854,132 @@ do
 	)
 end
 
+-- ---------------------------------------------------------------------------
+-- char mode (f/t/F/T): CJK-aware enhanced motions through the
+-- idempotent char_mode_patch -- at pattern level and through the real
+-- Char.jump loop (search chars prefed into typeahead, the same
+-- technique the jump sections above use)
+
+do
+	local patches = require("flash-cjk.patches")
+	patches.char_mode_patch() -- no-op when setup() already installed it
+	local Char = require("flash.plugins.char")
+	local FlashConfig = require("flash.config")
+	local char_lines = { "aa 中 bb 梯 cc", "xx 你 yy" }
+
+	ok(Char._flash_cjk_patched == true, "char mode: patch marker set on flash.plugins.char")
+	local ok_re, re_v = pcall(vim.regex, Char.mode("f")("v"))
+	ok(ok_re, "char mode: mode(f)(v) compiles as a vim regex")
+	ok(ok_re and re_v:match_str("中") ~= nil, "char mode: v pattern matches 中 (flypy zh->v)")
+	local re_t = vim.regex(Char.mode("f")("t"))
+	ok(re_t:match_str("中") ~= nil, "char mode: t pattern matches 中 (ja tyuu)")
+	ok(re_t:match_str("梯") ~= nil, "char mode: t pattern matches 梯 (zhcn ti)")
+	ok(re_t:match_str("你") == nil, "char mode: t pattern does not match 你")
+
+	local pat_t = Char.mode("t")("t")
+	ok(
+		pat_t:sub(1, 6) == "\\m.\\ze",
+		"char mode: t pattern starts with \\m.\\ze (char before target)"
+	)
+	local pat_T = Char.mode("T")("t")
+	ok(
+		pat_T:find("\\zs.", 1, true) ~= nil,
+		"char mode: T pattern contains \\zs. (char after target)"
+	)
+	ok(vim.regex(pat_t):match_str("x中") ~= nil, "char mode: t regex matches the char before 中")
+	ok(vim.regex(pat_T):match_str("中x") ~= nil, "char mode: T regex matches the char after 中")
+
+	-- multi_line = false prepends the cursor-line anchor
+	vim.cmd("enew!")
+	vim.api.nvim_buf_set_lines(0, 0, -1, false, char_lines)
+	vim.api.nvim_win_set_cursor(0, { 1, 0 })
+	FlashConfig.setup({ modes = { char = { multi_line = false } } })
+	local anchored = Char.mode("f")("v")
+	ok(anchored:sub(1, 4) == "\\%1l", "char mode: multi_line=false prepends \\%1l on line 1")
+	FlashConfig.setup({ modes = { char = { multi_line = true } } })
+	ok(Char.mode("f")("v"):sub(1, 4) ~= "\\%1l", "char mode: anchor gone after multi_line restore")
+
+	-- idempotence: a second patch call must not double-wrap
+	patches.char_mode_patch()
+	ok(Char._flash_cjk_patched == true, "char mode: marker survives a second patch call")
+	ok(
+		not Char.mode("t")("t"):find("\\m.\\ze\\m.\\ze", 1, true),
+		"char mode: re-patch does not double-wrap"
+	)
+	local ok_re2, re_v2 = pcall(vim.regex, Char.mode("f")("v"))
+	ok(ok_re2 and re_v2:match_str("中") ~= nil, "char mode: pattern still matches after re-patch")
+
+	-- config gate at pattern level: char=false restores the native literal
+	fc.setup({ char = false })
+	ok(Char.mode("f")("v") == "\\Vv", "char mode: char=false falls back to native \\Vv")
+	fc.setup({ char = true })
+
+	-- flow level: real Char.jump in a scratch buffer. The state must
+	-- be reset between cases -- same-motion repeats read no new char.
+	-- Earlier loop sections abort by re-queuing <esc> into typeahead
+	-- (the flash loop consumes prefed keys raw), and one leftover esc
+	-- would silently kill the prefed chars below -- drain first.
+	while true do
+		local c = vim.fn.getcharstr(0)
+		if c == 0 or c == "" then
+			break
+		end
+	end
+	local function char_reset()
+		if Char.state then
+			Char.state:hide()
+		end
+		Char.state = nil
+		Char.char = nil
+		Char.motion = "f"
+	end
+
+	local function char_case(motion, prefeed, cursor)
+		char_reset()
+		vim.cmd("enew!")
+		vim.api.nvim_buf_set_lines(0, 0, -1, false, char_lines)
+		vim.api.nvim_win_set_cursor(0, cursor or { 1, 0 })
+		if prefeed then
+			vim.api.nvim_input(prefeed)
+		end
+		local ran = pcall(Char.jump, motion)
+		return vim.api.nvim_win_get_cursor(0), ran
+	end
+
+	local cur, ran = char_case("f", "t")
+	ok(ran and cur[1] == 1 and cur[2] == 3, "char flow: f+t jumps to 中 (byte 4)")
+	cur, ran = char_case("f", "v")
+	ok(ran and cur[1] == 1 and cur[2] == 3, "char flow: f+v jumps to 中 (byte 4)")
+	cur, ran = char_case("f", "b")
+	ok(ran and cur[1] == 1 and cur[2] == 7, "char flow: f+b jumps to the literal b (byte 8)")
+	cur, ran = char_case("t", "v")
+	ok(ran and cur[1] == 1 and cur[2] == 2, "char flow: t+v stops right before 中 (byte 3)")
+	cur, ran = char_case("F", "n", { 2, 7 })
+	ok(ran and cur[1] == 2 and cur[2] == 3, "char flow: F+n jumps back to 你 (line 2, byte 4)")
+	cur, ran = char_case("T", "t", { 1, 7 })
+	ok(ran and cur[1] == 1 and cur[2] == 6, "char flow: T+t stops right after 中 (byte 7)")
+
+	-- repeat: after f+b lands on byte 8, ";" re-jumps without reading
+	-- a new char (the second b)
+	cur, ran = char_case("f", "b")
+	ok(ran and cur[1] == 1 and cur[2] == 7, "char flow: repeat setup lands on the first b (byte 8)")
+	local ok_repeat = pcall(Char.jump, ";")
+	cur = vim.api.nvim_win_get_cursor(0)
+	ok(
+		ok_repeat and cur[1] == 1 and cur[2] == 8,
+		"char flow: ; repeat jumps to the second b (byte 9)"
+	)
+
+	-- config gate through the loop: char=false restores native semantics
+	fc.setup({ char = false })
+	cur, ran = char_case("f", "z")
+	ok(
+		ran and cur[1] == 1 and cur[2] == 0,
+		"char flow: char=false f+z finds no literal z (no move)"
+	)
+	fc.setup({ char = true }) -- re-enable for anything that follows
+end
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then
 	error("test failures")

@@ -63,6 +63,7 @@ Default configuration:
 	},
 	priority = { "zhcn", "ja", "ko" },
 	mixed_input = true,
+	char = true,
 }
 ```
 
@@ -89,6 +90,10 @@ When multiple languages match at once, `priority = { "zhcn", "ja", "ko" }` deter
 
 Allows a single query to mix input codes from different languages. See Mixed input in the usage examples below.
 
+### `char`
+
+Makes flash.nvim's built-in enhanced char motions (flash's `modes.char`, enabled by default) CJK-aware. A single typed character is matched through the same multi-language engine as `s`-jumps: `fv` jumps to `中` (Xiaohe `v` initial for zhong), while `ft` reaches `中` (Japanese kunrei-shiki `tyuu`) or `梯` (pinyin `ti`). `;`/`,` cycling, counts, and operator-pending behave exactly like flash's native motions. Matching is single-character only — press `s` for full multi-key readings. Set `setup({ char = false })` to restore flash's native ASCII-only behavior.
+
 ## ⌨️ Usage
 
 Usage is almost identical to flash.nvim: press `s`, then type the input code for the target text. The examples below include the trigger key `s` as part of the full key sequence.
@@ -104,6 +109,10 @@ Type `si` (`s` starts flash-cjk and `i` is the query) to match the `i` in `Engli
 ### Mixed input
 
 Type `sav` to match `a中`: `a` is matched literally as ASCII, while `v` is the Xiaohe double pinyin code prefix for `中`.
+
+### Char motions
+
+The same engine also powers `f`/`t`/`F`/`T` (flash's enhanced char motions). On the sample line above, `fv` jumps to `中`.
 
 ### Multi-language matching
 

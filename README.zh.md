@@ -63,6 +63,7 @@ https://github.com/user-attachments/assets/37599dab-b0c6-4d90-8463-cb4706841ac3
 	},
 	priority = { "zhcn", "ja", "ko" },
 	mixed_input = true,
+	char = true,
 }
 ```
 
@@ -89,6 +90,10 @@ https://github.com/user-attachments/assets/37599dab-b0c6-4d90-8463-cb4706841ac3
 
 允许一次查询同时包含不同语言的输入码，见下方使用示例中的混合输入。
 
+### `char`
+
+让 flash.nvim 内置的增强字符移动（flash 的 `modes.char`，默认开启）也支持 CJK 匹配。输入的单个字符会通过与 `s` 跳转相同的多语言引擎匹配：`fv` 可以跳到「中」（小鹤双拼中 zhong 的声母 `v`），`ft` 则能到达「中」（日语训令式罗马字 `tyuu`）或「梯」（拼音 `ti`）。`;`/`,` 循环、计数和 operator-pending 行为与 flash 原生移动完全一致。匹配只支持单个字符——需要完整的多键输入码时请按 `s`。设置 `setup({ char = false })` 即可恢复 flash 原生的纯 ASCII 行为。
+
 ## ⌨️ 使用
 
 用法和 flash.nvim 基本一致：按下 `s`，再输入目标文本的输入码即可。下面的示例会把触发键 `s` 一并写入完整按键序列。
@@ -104,6 +109,10 @@ English, a中文，日本語, 한국어. Hello, 你好，こんにちは、안�
 ### 混合输入
 
 输入 `sav` 可以匹配「a中」：`a` 使用 ASCII 字面匹配，`v` 是小鹤双拼中「中」的输入码前缀。
+
+### 字符移动
+
+同样的引擎也作用于 `f`/`t`/`F`/`T`（flash 的增强字符移动）。在上面这行示例中，`fv` 会跳到「中」。
 
 ### 多语言匹配
 

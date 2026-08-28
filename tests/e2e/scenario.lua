@@ -264,4 +264,97 @@ if not no_rust then
 	ok(addr ~= nil and vim.uv.fs_stat(addr) ~= nil, "server mode: socket exists")
 end
 
+-- 3. Char mode (f/t/F/T) through the real flash char flow: Char.jump
+-- driven with the target prefed into the typeahead (flash's getchar
+-- consumes nvim_input keys raw, bypassing keymaps -- same technique
+-- as fc.jump above). The char wrap is vim-regex in BOTH phases (rust
+-- never touches modes.char), so every check is phase-agnostic.
+-- Char state is reset between cases: while a char state is visible,
+-- the same motion letter means clever-f repeat and reads no new char.
+do
+	local Char = require("flash.plugins.char")
+	-- byte cols (1-based): line 1 中=4 梯=11, line 2 你=4
+	local clines = { "aa 中 bb 梯 cc", "xx 你 yy" }
+	vim.cmd("enew!")
+	vim.api.nvim_buf_set_lines(0, 0, -1, false, clines)
+	vim.api.nvim_win_set_cursor(0, { 1, 0 })
+
+	local function char_reset()
+		Char.motion = "f"
+		Char.char = nil
+		Char.current = false
+		Char.jump_labels = false
+		if Char.state then
+			Char.state:hide()
+			Char.state = nil
+		end
+	end
+
+	-- cursor resets between runs so every motion starts from the same
+	-- spot (backward cases pass their own start position)
+	local function char_jump(motion, prefed, cursor)
+		char_reset()
+		vim.api.nvim_win_set_cursor(0, cursor or { 1, 0 })
+		vim.api.nvim_input(prefed)
+		return pcall(Char.jump, motion)
+	end
+
+	local function check_landed(label, want_row, want_col, okr, err)
+		local r, c = unpack(vim.api.nvim_win_get_cursor(0))
+		ok(
+			okr and r == want_row and c + 1 == want_col,
+			("char %s (got %d,%d want %d,%d%s)"):format(
+				label,
+				r,
+				c + 1,
+				want_row,
+				want_col,
+				not okr and err and (": " .. tostring(err)) or ""
+			)
+		)
+	end
+
+	-- f+t: tyuu (ja) reads 中; 梯 (zhcn ti) is t-initial too but later
+	-- on the line -- the leftmost match wins
+	local okc, errc = char_jump("f", "t")
+	check_landed("f+t: cursor on 中, first t-initial match", 1, 4, okc, errc)
+
+	-- f+v: zhcn flypy singlepin zh -> v reads the same 中
+	okc, errc = char_jump("f", "v")
+	check_landed("f+v: cursor on 中 (zhcn flypy)", 1, 4, okc, errc)
+
+	-- t+v: native t lands on the char right BEFORE the target
+	okc, errc = char_jump("t", "v")
+	check_landed("t+v: cursor on char before 中", 1, 3, okc, errc)
+
+	-- F+n: backward from the tail of line 2 onto 你 (ja)
+	okc, errc = char_jump("F", "n", { 2, 7 })
+	check_landed("F+n: cursor back on 你", 2, 4, okc, errc)
+
+	-- T+t: native T lands on the char right AFTER the target (the
+	-- space following 中)
+	okc, errc = char_jump("T", "t", { 1, 7 })
+	check_landed("T+t: cursor on char after 中", 1, 7, okc, errc)
+
+	-- f+b: plain ascii input stays a literal match
+	okc, errc = char_jump("f", "b")
+	check_landed("f+b: cursor on literal b", 1, 8, okc, errc)
+
+	-- ";" repeats the last f WITHOUT reading a new char (no prefed
+	-- key, straight to the second b from where f+b landed)
+	okc, errc = pcall(Char.jump, ";")
+	check_landed("; repeat: second b, no new char read", 1, 9, okc, errc)
+
+	-- setup({ char = false }) restores native char motions: no literal
+	-- z anywhere on the line and no CJK reading consulted, so the
+	-- cursor must stay put
+	fc.setup({ char = false })
+	okc, errc = char_jump("f", "z")
+	check_landed("char=false: f+z native finds nothing, no move", 1, 1, okc, errc)
+
+	-- re-enable what this section disabled
+	fc.setup({ char = true })
+	ok(fc.config.char == true, "char re-enabled after the disabled check")
+end
+
 finish()

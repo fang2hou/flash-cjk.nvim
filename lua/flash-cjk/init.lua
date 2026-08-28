@@ -64,6 +64,7 @@ local function build_opts(langs)
 	-- lock is configured; everything else keeps flash's behavior.
 	patches.get_char_patch()
 	patches.prompt_patch()
+	patches.char_mode_patch()
 	local defaults = {
 		labels = "asdfghjklqwertyuiopzxcvbnm",
 		search = {
@@ -114,10 +115,16 @@ function M.setup(opts)
 	if type(opts.mixed_input) == "boolean" then
 		M.config.mixed_input = opts.mixed_input
 	end
+	if type(opts.char) == "boolean" then
+		M.config.char = opts.char
+	end
 	if opts.priority ~= nil then
 		-- labeler-layer only: the mix mode does not read it
 		M.config.priority = config.normalize_priority(opts.priority)
 	end
+	-- also installed here so ftFT is CJK-aware before the first jump:
+	-- flash-cjk loads before flash's first f/F/t/T press
+	patches.char_mode_patch()
 end
 
 return M

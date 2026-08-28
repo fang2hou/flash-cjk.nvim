@@ -22,7 +22,7 @@ input letter.
   resolution (no flash.nvim dependency)
 - `match.lua` — matching domain: segmentation parser, punctuation classes,
   language-lock markers, mixed-mode compiler
-- `patches.lua` — flash.nvim patches (C-c dispatch, prompt lock display)
+- `patches.lua` — flash.nvim patches (C-c dispatch, prompt lock display, char-motion f/t/F/T search-mode wrap)
 - `util.lua` — shared helpers
 - `labeler.lua` — flash labeler: next-letter prediction (from spellings or the Rust matcher's per-match predictions), skip-set, monotonic label pool
 - `rust.lua` — bridge to the native matcher: persistent UDS server transport (Unix, zero config), per-keystroke spawn fallback, JSON protocol, circuit breaker to the vim-regex path

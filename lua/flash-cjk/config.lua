@@ -19,6 +19,8 @@ M.config = {
 	},
 	priority = { "zhcn", "ja", "ko" },
 	mixed_input = true,
+	-- CJK-aware f/t/F/T through flash.nvim's char mode
+	char = true,
 }
 
 ---Normalizes one languages[lang] value: true -> enabled, false ->
