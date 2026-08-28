@@ -920,6 +920,18 @@ do
 	ok(not ok_bad, "char mode: motions.char rejects non-boolean values")
 	ok(fc.config.motions.char == true, "char mode: config untouched after rejected setup")
 	ok(not pcall(fc.setup, { motions = "nope" }), "char mode: motions rejects non-table values")
+	-- unknown motion fields are dropped (forward compatibility),
+	-- including future table-shaped ones -- nothing arbitrary persists
+	fc.setup({ motions = { search = { enabled = true } } })
+	ok(
+		fc.config.motions.char == true and fc.config.motions.search == nil,
+		"char mode: unknown motion fields dropped by setup"
+	)
+	local ok_typo = pcall(fc.setup, { motions = { typo = true } })
+	ok(
+		ok_typo and fc.config.motions.typo == nil,
+		"char mode: boolean typo succeeds and is not persisted"
+	)
 
 	-- flow level: real Char.jump in a scratch buffer. The state must
 	-- be reset between cases -- same-motion repeats read no new char.
